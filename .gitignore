@@ -1,0 +1,46 @@
+node_modules/
+
+# Build and packaging output
+out/
+dist/
+build/
+release/
+*.asar
+*.blockmap
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.vsix
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+
+# Local application data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs and local tooling state
+*.log
+.eslintcache
+.vite/
+.turbo/
+coverage/
+
+# IDE and OS files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+Thumbs.db
+.DS_Store

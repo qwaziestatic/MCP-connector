@@ -1,0 +1,63 @@
+{
+  "name": "mcp-connector-vscode",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "publisher": "mcp-connector",
+  "description": "Optional VS Code context client for MCP Connector.",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && esbuild dist/extension.js --bundle --platform=node --external:vscode --allow-overwrite --outfile=dist/extension.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "npm run build && vsce package --allow-missing-repository --no-dependencies"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.96.0",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.7.2",
+    "@vscode/vsce": "^3.6.0"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "activationEvents": [
+    "onCommand:mcpConnector.connect",
+    "onCommand:mcpConnector.disconnect",
+    "onCommand:mcpConnector.configure"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "mcpConnector.connect",
+        "title": "MCP Connector: Connect"
+      },
+      {
+        "command": "mcpConnector.disconnect",
+        "title": "MCP Connector: Disconnect"
+      },
+      {
+        "command": "mcpConnector.configure",
+        "title": "MCP Connector: Configure Listener"
+      }
+    ],
+    "configuration": {
+      "title": "MCP Connector",
+      "properties": {
+        "mcpConnector.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Loopback WebSocket endpoint shown by the desktop app."
+        },
+        "mcpConnector.sendDocumentText": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send the active document text. Disabled by default."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  target      String
+  status      String
+  previewJson String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model WorkflowPreview {
+  id               String   @id
+  action           String
+  target           String
+  summary          String
+  payloadJson      String
+  requiresApproval Boolean
+  createdAt        DateTime
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  executedAt       DateTime?
+  failedAt         DateTime?
+
+  @@index([createdAt])
+}

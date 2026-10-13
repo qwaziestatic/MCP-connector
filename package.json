@@ -1,0 +1,31 @@
+{
+  "name": "mcp-connector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure Windows desktop integration platform exposing local app contexts and cloud APIs as MCP tools.",
+  "license": "UNLICENSED",
+  "packageManager": "npm@11.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@mcp-connector/desktop",
+    "build": "npm run build --workspaces --if-present",
+    "package:win": "npm run package:win --workspace=@mcp-connector/desktop",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate --workspace=@mcp-connector/core",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@mcp-connector/core",
+    "build:vscode": "npm run build --workspace=apps/vscode-extension",
+    "package:vscode": "npm run package --workspace=apps/vscode-extension"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
