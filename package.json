@@ -11,9 +11,9 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@mcp-connector/desktop",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspace=@mcp-connector/core && npm run build --workspace=@mcp-connector/desktop && npm run build --workspace=apps/vscode-extension",
     "package:win": "npm run package:win --workspace=@mcp-connector/desktop",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace=@mcp-connector/core && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate --workspace=@mcp-connector/core",
