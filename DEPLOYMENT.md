@@ -52,6 +52,17 @@ variables before starting the application:
 OAuth access and refresh tokens are stored after authorization in the
 Electron `safeStorage` vault. The installer does not contain those credentials.
 
+For GitHub Releases, the generic feed URL should point to the release asset
+directory for the selected version, for example:
+
+```text
+https://github.com/qwaziestatic/MCP-connector/releases/download/v0.1.0/
+```
+
+The feed must contain Electron Builder's generated `latest.yml` and the
+matching signed installer assets. Do not enable the updater until signed
+artifacts and a tested feed are available.
+
 ## VS Code context listener
 
 The desktop app can start an authenticated loopback WebSocket listener for a
@@ -103,3 +114,7 @@ with `prisma.config.ts`, schema datasource URL removal, and the SQLite driver
 adapter integration in the Electron main process.
 `npm audit --omit=dev` is currently clean (0 runtime vulnerabilities) on this
 workspace state.
+
+Automated CI and manual release artifact workflows are defined in
+`.github/workflows/ci.yml` and `.github/workflows/release.yml`. The complete
+manual verification procedure is in [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md).
