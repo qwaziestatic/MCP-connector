@@ -17,7 +17,7 @@ describe("VS Code context server", () => {
     });
 
     const unauthorized = new WebSocket(server.url);
-    await expect(new Promise<void>((resolve, reject) => {
+    await expect(new Promise<void>((resolve) => {
       unauthorized.once("close", () => resolve());
       unauthorized.once("error", () => resolve());
     })).resolves.toBeUndefined();
