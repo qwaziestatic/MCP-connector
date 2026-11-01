@@ -5,6 +5,39 @@ export interface DesktopApi {
   readonly app: {
     readonly getVersion: () => Promise<string>;
   };
+  readonly updater: {
+    readonly getStatus: () => Promise<{
+      readonly enabled: boolean;
+      readonly phase: "disabled" | "idle" | "checking" | "available" | "unavailable" | "downloading" | "downloaded" | "error";
+      readonly currentVersion: string;
+      readonly availableVersion: string | null;
+      readonly downloadedVersion: string | null;
+      readonly progressPercent: number | null;
+      readonly lastCheckedAt: string | null;
+      readonly message: string | null;
+    }>;
+    readonly check: () => Promise<{
+      readonly enabled: boolean;
+      readonly phase: "disabled" | "idle" | "checking" | "available" | "unavailable" | "downloading" | "downloaded" | "error";
+      readonly currentVersion: string;
+      readonly availableVersion: string | null;
+      readonly downloadedVersion: string | null;
+      readonly progressPercent: number | null;
+      readonly lastCheckedAt: string | null;
+      readonly message: string | null;
+    }>;
+    readonly download: () => Promise<{
+      readonly enabled: boolean;
+      readonly phase: "disabled" | "idle" | "checking" | "available" | "unavailable" | "downloading" | "downloaded" | "error";
+      readonly currentVersion: string;
+      readonly availableVersion: string | null;
+      readonly downloadedVersion: string | null;
+      readonly progressPercent: number | null;
+      readonly lastCheckedAt: string | null;
+      readonly message: string | null;
+    }>;
+    readonly quitAndInstall: () => Promise<void>;
+  };
   readonly filesystem: {
     readonly chooseWorkspace: () => Promise<string | null>;
     readonly inspectWorkspace: (workspacePath: string) => Promise<WorkspaceSnapshot>;

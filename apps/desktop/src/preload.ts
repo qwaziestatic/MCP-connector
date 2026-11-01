@@ -5,6 +5,12 @@ const desktopApi: DesktopApi = {
   app: {
     getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>
   },
+  updater: {
+    getStatus: () => ipcRenderer.invoke("updater:get-status"),
+    check: () => ipcRenderer.invoke("updater:check"),
+    download: () => ipcRenderer.invoke("updater:download"),
+    quitAndInstall: () => ipcRenderer.invoke("updater:quit-and-install")
+  },
   filesystem: {
     chooseWorkspace: () =>
       ipcRenderer.invoke("filesystem:choose-workspace") as Promise<string | null>,

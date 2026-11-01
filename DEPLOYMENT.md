@@ -44,6 +44,10 @@ variables before starting the application:
 - `MCP_NOTION_CLIENT_SECRET`
 - `MCP_NOTION_DATABASE_ID`
 - `MCP_HTTP_ENABLED` (set to `true` to enable the authenticated loopback MCP server)
+- `MCP_UPDATER_ENABLED` (set to `true` to enable update checks)
+- `MCP_UPDATE_FEED_URL` (required when updater is enabled; generic provider URL)
+- `MCP_UPDATE_CHANNEL` (optional release channel override)
+- `MCP_UPDATE_FEED_TOKEN` (optional bearer token for authenticated feed endpoints)
 
 OAuth access and refresh tokens are stored after authorization in the
 Electron `safeStorage` vault. The installer does not contain those credentials.
@@ -82,7 +86,7 @@ Before distributing a production release:
 1. Provide a Windows Authenticode certificate through `CSC_LINK` and
    `CSC_KEY_PASSWORD`.
 2. Replace the default Electron icon with a reviewed application icon.
-3. Configure update hosting and an update policy.
+3. Configure update hosting and the production feed URL/channel/token values.
 4. Run the dependency audit and security review for the release commit.
 
 ## Current release validation
@@ -94,8 +98,8 @@ The current release artifacts have been validated locally:
 - Workspace tests, type checks, and production builds pass.
 
 The artifacts are not yet production releases. The Windows installer is
-unsigned and uses the default Electron icon. The dependency audit still
-reports three high-severity findings in the Prisma CLI development toolchain;
-the available automatic fix is a breaking/downgrading Prisma change and has
-not been applied. A dedicated Prisma 7 migration is required before that
-finding can be remediated safely.
+unsigned and uses the default Electron icon. Prisma has been migrated to v7
+with `prisma.config.ts`, schema datasource URL removal, and the SQLite driver
+adapter integration in the Electron main process.
+`npm audit --omit=dev` is currently clean (0 runtime vulnerabilities) on this
+workspace state.

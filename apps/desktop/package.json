@@ -13,16 +13,17 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "database:migrate": "prisma migrate deploy --schema ../../packages/core/prisma/schema.prisma"
+    "database:migrate": "npm run prisma:migrate --workspace=@mcp-connector/core"
   },
   "dependencies": {
     "@mcp-connector/core": "0.1.0",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-better-sqlite3": "^7.0.0",
+    "@prisma/client": "^7.0.0",
     "@tanstack/react-query": "^5.62.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "ws": "^8.18.0",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -31,9 +32,10 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "33.4.11",
     "electron-builder": "^25.1.8",
+    "electron-updater": "^6.3.9",
     "electron-vite": "^2.3.0",
     "eslint": "^9.16.0",
-    "prisma": "^6.19.3",
+    "prisma": "^7.0.0",
     "vitest": "^2.1.8"
   },
   "build": {

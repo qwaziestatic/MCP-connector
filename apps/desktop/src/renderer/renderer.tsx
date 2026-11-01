@@ -45,6 +45,25 @@ function App(): JSX.Element {
     readonly bearerToken: string | null;
     readonly latestContext: VsCodeContext | null;
   }>({ enabled: false, url: null, bearerToken: null, latestContext: null });
+  const [updaterStatus, setUpdaterStatus] = useState<{
+    readonly enabled: boolean;
+    readonly phase: "disabled" | "idle" | "checking" | "available" | "unavailable" | "downloading" | "downloaded" | "error";
+    readonly currentVersion: string;
+    readonly availableVersion: string | null;
+    readonly downloadedVersion: string | null;
+    readonly progressPercent: number | null;
+    readonly lastCheckedAt: string | null;
+    readonly message: string | null;
+  }>({
+    enabled: false,
+    phase: "disabled",
+    currentVersion: "unknown",
+    availableVersion: null,
+    downloadedVersion: null,
+    progressPercent: null,
+    lastCheckedAt: null,
+    message: null
+  });
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +88,23 @@ function App(): JSX.Element {
       refreshAudit(),
       window.desktopApi.credentials.getStatus().then(setConnectionStatus),
       window.desktopApi.mcp.getStatus().then(setMcpStatus),
-      window.desktopApi.vscode.getStatus().then(setVscodeStatus)
+      window.desktopApi.vscode.getStatus().then(setVscodeStatus),
+      window.desktopApi.updater.getStatus().then(setUpdaterStatus)
     ]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Unable to load audit history.");
     });
   }, []);
+
+  useEffect(() => {
+    if (updaterStatus.phase !== "checking" && updaterStatus.phase !== "downloading") {
+      return;
+    }
+
+    const poll = window.setInterval(() => {
+      void window.desktopApi.updater.getStatus().then(setUpdaterStatus).catch(() => undefined);
+    }, 1000);
+    return () => window.clearInterval(poll);
+  }, [updaterStatus.phase]);
 
   const updateConnection = async (
     provider: "github" | "notion",
@@ -222,6 +253,44 @@ function App(): JSX.Element {
     }
   };
 
+  const checkForUpdates = async (): Promise<void> => {
+    setError(null);
+    setBusy(true);
+    try {
+      setUpdaterStatus(await window.desktopApi.updater.check());
+      setUpdaterStatus(await window.desktopApi.updater.getStatus());
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to check for updates.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadUpdate = async (): Promise<void> => {
+    setError(null);
+    setBusy(true);
+    try {
+      setUpdaterStatus(await window.desktopApi.updater.download());
+      setUpdaterStatus(await window.desktopApi.updater.getStatus());
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to download update.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const quitAndInstallUpdate = async (): Promise<void> => {
+    setError(null);
+    setBusy(true);
+    try {
+      await window.desktopApi.updater.quitAndInstall();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to install update.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -323,6 +392,47 @@ function App(): JSX.Element {
               </button>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="card integrations-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">APPLICATION UPDATES</p>
+            <h2>Auto-update channel</h2>
+          </div>
+          <span className={`badge ${updaterStatus.phase === "downloaded" || updaterStatus.phase === "available" ? "success" : ""}`}>
+            {updaterStatus.phase}
+          </span>
+        </div>
+        <p className="muted">
+          Current version {updaterStatus.currentVersion}. Updates are opt-in and require explicit action.
+        </p>
+        {updaterStatus.lastCheckedAt !== null && (
+          <p className="muted">Last check: {formatDate(updaterStatus.lastCheckedAt)}</p>
+        )}
+        {updaterStatus.message !== null && <p className="muted">{updaterStatus.message}</p>}
+        {updaterStatus.progressPercent !== null && (
+          <p className="muted">Download progress: {updaterStatus.progressPercent.toFixed(1)}%</p>
+        )}
+        <div className="actions endpoint-actions">
+          <button className="button secondary" onClick={() => void checkForUpdates()} disabled={busy || !updaterStatus.enabled}>
+            Check for updates
+          </button>
+          <button
+            className="button approve"
+            onClick={() => void downloadUpdate()}
+            disabled={busy || updaterStatus.phase !== "available"}
+          >
+            Download update
+          </button>
+          <button
+            className="button primary"
+            onClick={() => void quitAndInstallUpdate()}
+            disabled={busy || updaterStatus.phase !== "downloaded"}
+          >
+            Install and restart
+          </button>
         </div>
       </section>
 

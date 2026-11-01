@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 const migrations = [
   {
@@ -38,14 +38,13 @@ export async function applyDatabaseMigrations(prisma: PrismaClient): Promise<voi
       continue;
     }
 
-    await prisma.$transaction(async (transaction: Prisma.TransactionClient) => {
-      for (const statement of migration.statements) {
-        await transaction.$executeRawUnsafe(statement);
-      }
-      await transaction.$executeRaw`
+    const statements = migration.statements.map((statement) => prisma.$executeRawUnsafe(statement));
+    await prisma.$transaction([
+      ...statements,
+      prisma.$executeRaw`
         INSERT INTO "_McpConnectorMigration" ("id")
         VALUES (${migration.id})
-      `;
-    });
+      `
+    ]);
   }
 }

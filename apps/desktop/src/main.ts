@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
 import {
   FilesystemService,
@@ -17,6 +18,7 @@ import { OAuthCallbackServer } from "./security/oauth-callback-server";
 import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
+import { AutoUpdateService } from "./updater/auto-update.service";
 import type { McpHttpServerHandle } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +29,7 @@ const oauthPkceService = new OAuthPkceService();
 const oauthTokenService = new FetchOAuthTokenService();
 let mcpHttpServer: McpHttpServerHandle | null = null;
 let vsCodeContextServer: VsCodeContextServerHandle | null = null;
+let autoUpdateService: AutoUpdateService | null = null;
 
 const developmentRendererOrigin = "http://localhost:5173";
 
@@ -105,6 +108,34 @@ function registerIpcHandlers(
   getGithubConnector: () => OctokitGitHubConnector
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
+  ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
+    enabled: false,
+    phase: "disabled",
+    currentVersion: app.getVersion(),
+    availableVersion: null,
+    downloadedVersion: null,
+    progressPercent: null,
+    lastCheckedAt: null,
+    message: "Auto-update service is not initialized."
+  });
+  ipcMain.handle("updater:check", async () => {
+    if (autoUpdateService === null) {
+      throw new Error("Auto-update service is not initialized.");
+    }
+    return autoUpdateService.checkForUpdates();
+  });
+  ipcMain.handle("updater:download", async () => {
+    if (autoUpdateService === null) {
+      throw new Error("Auto-update service is not initialized.");
+    }
+    return autoUpdateService.downloadUpdate();
+  });
+  ipcMain.handle("updater:quit-and-install", () => {
+    if (autoUpdateService === null) {
+      throw new Error("Auto-update service is not initialized.");
+    }
+    autoUpdateService.quitAndInstall();
+  });
 
   ipcMain.handle("filesystem:choose-workspace", async () => {
     const result = await dialog.showOpenDialog({
@@ -315,8 +346,12 @@ function createMainWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   configureElectronSecurity();
-  process.env.DATABASE_URL = `file:${join(app.getPath("userData"), "mcp-connector.db")}`;
-  const prisma = new PrismaClient();
+  const databaseUrl = `file:${join(app.getPath("userData"), "mcp-connector.db")}`;
+  process.env.DATABASE_URL = databaseUrl;
+  const prisma = new PrismaClient({
+    adapter: new PrismaBetterSqlite3({ url: databaseUrl })
+  });
+  autoUpdateService = new AutoUpdateService();
   try {
     await applyDatabaseMigrations(prisma);
     const auditRepository = new PrismaAuditRepository(prisma);
@@ -379,6 +414,13 @@ app.whenReady().then(async () => {
         mcpHttpServer = await startMcpHttpServer(dependencies);
       }
       console.log(`MCP HTTP server listening at ${mcpHttpServer.url}`);
+    }
+    if (autoUpdateService.getStatus().enabled) {
+      try {
+        await autoUpdateService.checkForUpdates();
+      } catch (cause: unknown) {
+        console.error("Auto-update check failed.", cause);
+      }
     }
     createMainWindow();
   } catch (error) {

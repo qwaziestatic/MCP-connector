@@ -35,7 +35,7 @@ export class WorkflowService {
     const validatedAction = actionSchema.parse(action);
     const validatedTarget = z.string().trim().min(1).parse(target);
     const validatedSummary = z.string().trim().min(1).parse(summary);
-    const validatedPayload = z.record(z.unknown()).parse(payload);
+    const validatedPayload = z.record(z.string(), z.unknown()).parse(payload);
     if (validatedTarget.length === 0 || validatedSummary.length === 0) {
       throw new Error("Workflow target and summary are required.");
     }
