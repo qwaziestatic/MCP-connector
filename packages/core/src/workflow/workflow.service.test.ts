@@ -110,6 +110,16 @@ describe("WorkflowService", () => {
     ).rejects.toThrow("Explicit approval is required");
   });
 
+  it("does not list rejected previews as pending", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {}, "mcp");
+    await service.reject(preview.id);
+
+    expect(await service.listPending()).toEqual([]);
+    expect(await new WorkflowService(repository, repository).listPending()).toEqual([]);
+  });
+
   it("cannot execute a preview after it has been rejected", async () => {
     const repository = new InMemoryAuditRepository();
     const firstService = new WorkflowService(repository, repository);

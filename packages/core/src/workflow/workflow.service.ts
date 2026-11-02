@@ -184,7 +184,8 @@ export class WorkflowService {
   async listPending(): Promise<readonly WorkflowPreviewState[]> {
     if (this.previewRepository !== undefined) {
       for (const record of await this.previewRepository.listPreviews()) {
-        if (!this.pending.has(record.preview.id)) {
+        // Rejected previews are final; they must not be reloaded and re-approved.
+        if (record.rejectedAt === undefined && !this.pending.has(record.preview.id)) {
           this.pending.set(record.preview.id, this.fromPersisted(record));
         }
       }
