@@ -66,6 +66,18 @@ describe("WorkflowService", () => {
     ).resolves.toBe("Persisted");
   });
 
+  it("cannot re-approve a persisted preview after it has been rejected", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    await service.reject(preview.id);
+
+    await expect(service.approve(preview.id)).rejects.toThrow("not found or has expired");
+    await expect(
+      service.executeApproved(preview.id, async () => "should not execute")
+    ).rejects.toThrow("Explicit approval is required");
+  });
+
   it("cannot execute a preview after it has been rejected", async () => {
     const repository = new InMemoryAuditRepository();
     const firstService = new WorkflowService(repository, repository);
