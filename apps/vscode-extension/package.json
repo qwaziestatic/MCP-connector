@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && esbuild dist/extension.js --bundle --platform=node --external:vscode --allow-overwrite --outfile=dist/extension.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
     "package": "npm run build && vsce package --allow-missing-repository --no-dependencies"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "@types/vscode": "^1.96.0",
     "@types/ws": "^8.5.13",
     "esbuild": "^0.21.5",
+    "eslint": "^9.16.0",
     "typescript": "^5.7.2",
     "@vscode/vsce": "^3.6.0"
   },

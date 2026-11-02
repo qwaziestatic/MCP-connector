@@ -66,18 +66,22 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
     {
       title: "List GitHub repositories",
       description: "List repositories accessible to the connected GitHub account.",
-      inputSchema: {},
+      inputSchema: {
+        name: z.string().trim().min(1).max(200).optional()
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: true
       }
     },
-    async () => {
+    async ({ name }) => {
       if (dependencies.github === undefined) {
         throw new Error("GitHub connector is not configured.");
       }
-      return result(await dependencies.github.listRepositories());
+      return result(await dependencies.github.listRepositories(
+        name === undefined ? {} : { name }
+      ));
     }
   );
 
@@ -102,13 +106,28 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
         "CREATE",
         "Notion project page",
         `Create Notion project page for ${workspacePath}`,
-        { workspacePath, title, markdown }
+        { workspacePath, title, markdown },
+        "mcp"
       );
       return result({
         requiresApproval: true,
         preview
       });
     }
+  );
+
+  server.registerTool(
+    "workflow_preview_status",
+    {
+      title: "Get workflow preview status",
+      description: "Get the current status of a workflow preview by ID.",
+      inputSchema: { previewId: z.string().uuid() },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+    },
+    async ({ previewId }) => result({
+      previewId,
+      status: await dependencies.workflow.getStatus(previewId)
+    })
   );
 
   server.registerTool(

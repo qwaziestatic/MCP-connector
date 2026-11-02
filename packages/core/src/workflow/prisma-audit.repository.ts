@@ -47,6 +47,7 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
         summary: preview.summary,
         payloadJson: JSON.stringify(preview.payload),
         requiresApproval: preview.requiresApproval,
+        source: preview.source,
         createdAt: new Date(preview.createdAt)
       }
     });
@@ -65,13 +66,20 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
         summary: record.summary,
         payload: JSON.parse(record.payloadJson) as Record<string, unknown>,
         requiresApproval: record.requiresApproval,
+        source: record.source as WorkflowPreview["source"],
         createdAt: record.createdAt.toISOString()
       },
       ...(record.approvedAt === null ? {} : { approvedAt: record.approvedAt.toISOString() }),
       ...(record.rejectedAt === null ? {} : { rejectedAt: record.rejectedAt.toISOString() }),
+      ...(record.executingAt === null ? {} : { executingAt: record.executingAt.toISOString() }),
       ...(record.executedAt === null ? {} : { executedAt: record.executedAt.toISOString() }),
       ...(record.failedAt === null ? {} : { failedAt: record.failedAt.toISOString() })
     };
+  }
+
+  async listPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
+    const records = await this.prisma.workflowPreview.findMany({ orderBy: { createdAt: "desc" } });
+    return Promise.all(records.map(async (record) => (await this.get(record.id))!));
   }
 
   async markApproved(id: string, approvedAt: string): Promise<void> {
@@ -87,6 +95,25 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
 
   async markExecuted(id: string, executedAt: string): Promise<void> {
     await this.prisma.workflowPreview.update({ where: { id }, data: { executedAt: new Date(executedAt) } });
+  }
+
+  async markExecuting(id: string, executingAt: string): Promise<void> {
+    await this.prisma.workflowPreview.update({ where: { id }, data: { executingAt: new Date(executingAt) } });
+  }
+
+  async claimExecution(id: string, executingAt: string): Promise<boolean> {
+    const result = await this.prisma.workflowPreview.updateMany({
+      where: {
+        id,
+        approvedAt: { not: null },
+        rejectedAt: null,
+        executingAt: null,
+        executedAt: null,
+        failedAt: null
+      },
+      data: { executingAt: new Date(executingAt) }
+    });
+    return result.count === 1;
   }
 
   async markFailed(id: string, failedAt: string): Promise<void> {

@@ -36,7 +36,9 @@ const developmentRendererOrigin = "http://localhost:5173";
 function isAllowedRendererUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    if (url.protocol === "file:") return !isDevelopment;
+    if (url.protocol === "file:") {
+      return !isDevelopment && fileURLToPath(url) === join(currentDirectory, "../renderer/index.html");
+    }
     return isDevelopment && url.origin === developmentRendererOrigin;
   } catch {
     return false;
@@ -196,6 +198,12 @@ function registerIpcHandlers(
   });
 
   ipcMain.handle("workflow:list-audit-records", () => auditRepository.list());
+  ipcMain.handle("workflow:list-pending", () => workflowService.listPending());
+  workflowService.subscribe((previews) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send("workflow:changed", previews);
+    }
+  });
 
   ipcMain.handle("workflow:execute-approved", async (_event, previewId: unknown) => {
     if (typeof previewId !== "string") {
@@ -322,7 +330,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     webPreferences: {
-      preload: join(currentDirectory, "preload.js"),
+      preload: join(currentDirectory, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true

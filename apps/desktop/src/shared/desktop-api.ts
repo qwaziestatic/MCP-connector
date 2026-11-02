@@ -1,4 +1,4 @@
-import type { AuditRecord, WorkflowPreview, WorkspaceSnapshot } from "@mcp-connector/core";
+import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 
 export interface DesktopApi {
@@ -51,6 +51,8 @@ export interface DesktopApi {
     ) => Promise<WorkflowPreview>;
     readonly approve: (previewId: string) => Promise<WorkflowPreview>;
     readonly reject: (previewId: string) => Promise<WorkflowPreview>;
+    readonly listPending: () => Promise<readonly WorkflowPreviewState[]>;
+    readonly subscribe: (listener: (previews: readonly WorkflowPreviewState[]) => void) => () => void;
     readonly executeApproved: (previewId: string) => Promise<{ readonly pageId: string; readonly url: string | null }>;
     readonly listAuditRecords: () => Promise<readonly AuditRecord[]>;
   };

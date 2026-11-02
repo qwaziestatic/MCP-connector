@@ -1,5 +1,6 @@
 export type WorkflowAction = "READ" | "CREATE" | "UPDATE" | "DELETE" | "UPLOAD";
-export type WorkflowStatus = "PREVIEWED" | "APPROVED" | "REJECTED" | "EXECUTED" | "FAILED";
+export type WorkflowStatus = "PREVIEWED" | "APPROVED" | "REJECTED" | "EXECUTING" | "EXECUTED" | "FAILED";
+export type WorkflowSource = "ui" | "mcp";
 
 export interface WorkflowPreview {
   readonly id: string;
@@ -8,6 +9,7 @@ export interface WorkflowPreview {
   readonly summary: string;
   readonly payload: Readonly<Record<string, unknown>>;
   readonly requiresApproval: boolean;
+  readonly source: WorkflowSource;
   readonly createdAt: string;
 }
 
@@ -30,14 +32,22 @@ export interface WorkflowPreviewRepository {
   get(id: string): Promise<WorkflowPreviewRecord | undefined>;
   markApproved(id: string, approvedAt: string): Promise<void>;
   markRejected(id: string, rejectedAt: string): Promise<void>;
+  claimExecution(id: string, executingAt: string): Promise<boolean>;
+  markExecuting(id: string, executingAt: string): Promise<void>;
   markExecuted(id: string, executedAt: string): Promise<void>;
   markFailed(id: string, failedAt: string): Promise<void>;
+  listPreviews(): Promise<readonly WorkflowPreviewRecord[]>;
 }
 
 export interface WorkflowPreviewRecord {
   readonly preview: WorkflowPreview;
   readonly approvedAt?: string;
   readonly rejectedAt?: string;
+  readonly executingAt?: string;
   readonly executedAt?: string;
   readonly failedAt?: string;
+}
+
+export interface WorkflowPreviewState extends WorkflowPreviewRecord {
+  readonly status: WorkflowStatus;
 }

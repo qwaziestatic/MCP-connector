@@ -48,13 +48,18 @@ export interface GitHubRepositorySummary {
   readonly isPrivate: boolean;
 }
 
+export interface GitHubRepositoryList {
+  readonly repositories: readonly GitHubRepositorySummary[];
+  readonly truncated: boolean;
+}
+
 export interface NotionPageDraft {
   readonly title: string;
   readonly markdown: string;
 }
 
 export interface GitHubConnector {
-  listRepositories(): Promise<readonly GitHubRepositorySummary[]>;
+  listRepositories(options?: { readonly name?: string; readonly limit?: number }): Promise<GitHubRepositoryList>;
 }
 
 export interface NotionConnector {

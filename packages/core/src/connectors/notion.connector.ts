@@ -64,6 +64,15 @@ export class OfficialNotionConnector implements NotionConnector {
       if (error instanceof APIResponseError && error.status === 403) {
         throw new Error("Notion denied page creation. Check integration access and database permissions.");
       }
+      if (error instanceof APIResponseError && error.status === 404 && error.code === "object_not_found") {
+        throw new Error("Share the target database with the MCP Connector integration in Notion.");
+      }
+      if (error instanceof APIResponseError && error.status === 400 && error.code === "validation_error") {
+        throw new Error(`Notion rejected the page request: ${error.message}`);
+      }
+      if (error instanceof TypeError || (error instanceof Error && /fetch|network|socket|connect/i.test(error.message))) {
+        throw new Error("Notion could not be reached. Check your internet connection and try again.");
+      }
       throw new Error("Notion page creation failed.");
     }
   }

@@ -56,7 +56,8 @@ describe("MCP protocol integration", () => {
       expect(tools.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
         "filesystem_inspect_workspace",
         "notion_create_project_page_preview",
-        "notion_create_project_page"
+        "notion_create_project_page",
+        "workflow_preview_status"
       ]));
 
       const inspection = await client.callTool({
@@ -91,6 +92,11 @@ describe("MCP protocol integration", () => {
       const previewPayload = JSON.parse(previewText.text) as {
         readonly preview: { readonly id: string };
       };
+      const pendingResult = await client.callTool({
+        name: "workflow_preview_status",
+        arguments: { previewId: previewPayload.preview.id }
+      });
+      expect(JSON.stringify(pendingResult)).toContain('"status":"PREVIEWED"');
 
       const unauthorizedExecution = await client.callTool({
         name: "notion_create_project_page",

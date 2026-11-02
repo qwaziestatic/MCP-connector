@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { WorkflowPreviewState } from "@mcp-connector/core";
 import type { DesktopApi } from "./shared/desktop-api";
 
 const desktopApi: DesktopApi = {
@@ -22,6 +23,12 @@ const desktopApi: DesktopApi = {
       ipcRenderer.invoke("workflow:create-preview", action, target, summary, payload),
     approve: (previewId) => ipcRenderer.invoke("workflow:approve", previewId),
     reject: (previewId) => ipcRenderer.invoke("workflow:reject", previewId),
+    listPending: () => ipcRenderer.invoke("workflow:list-pending"),
+    subscribe: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, previews: readonly WorkflowPreviewState[]) => listener(previews);
+      ipcRenderer.on("workflow:changed", callback);
+      return () => ipcRenderer.removeListener("workflow:changed", callback);
+    },
     executeApproved: (previewId) => ipcRenderer.invoke("workflow:execute-approved", previewId),
     listAuditRecords: () => ipcRenderer.invoke("workflow:list-audit-records")
   },

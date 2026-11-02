@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type {
   AuditRecord,
   WorkflowPreview,
+  WorkflowPreviewState,
   WorkspaceSnapshot
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
@@ -25,6 +26,7 @@ function App(): JSX.Element {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [preview, setPreview] = useState<WorkflowPreview | null>(null);
+  const [pendingPreviews, setPendingPreviews] = useState<readonly WorkflowPreviewState[]>([]);
   const [approvedPreviewId, setApprovedPreviewId] = useState<string | null>(null);
   const [auditRecords, setAuditRecords] = useState<readonly AuditRecord[]>([]);
   const [auditSearch, setAuditSearch] = useState("");
@@ -86,6 +88,7 @@ function App(): JSX.Element {
   useEffect(() => {
     void Promise.all([
       refreshAudit(),
+      window.desktopApi.workflow.listPending().then(setPendingPreviews),
       window.desktopApi.credentials.getStatus().then(setConnectionStatus),
       window.desktopApi.mcp.getStatus().then(setMcpStatus),
       window.desktopApi.vscode.getStatus().then(setVscodeStatus),
@@ -94,6 +97,8 @@ function App(): JSX.Element {
       setError(cause instanceof Error ? cause.message : "Unable to load audit history.");
     });
   }, []);
+
+  useEffect(() => window.desktopApi.workflow.subscribe(setPendingPreviews), []);
 
   useEffect(() => {
     if (updaterStatus.phase !== "checking" && updaterStatus.phase !== "downloading") {
@@ -160,6 +165,7 @@ function App(): JSX.Element {
         }
       );
       setPreview(nextPreview);
+      setPendingPreviews(await window.desktopApi.workflow.listPending());
       await refreshAudit();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to create preview.");
@@ -182,6 +188,7 @@ function App(): JSX.Element {
         setApprovedPreviewId(null);
         setPreview(null);
       }
+      setPendingPreviews(await window.desktopApi.workflow.listPending());
       await refreshAudit();
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to record approval decision.");
@@ -250,6 +257,18 @@ function App(): JSX.Element {
       setError(cause instanceof Error ? cause.message : "Unable to execute approved action.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const decidePending = async (item: WorkflowPreviewState, decision: "approve" | "reject"): Promise<void> => {
+    setError(null);
+    try {
+      if (decision === "approve") await window.desktopApi.workflow.approve(item.preview.id);
+      else await window.desktopApi.workflow.reject(item.preview.id);
+      setPendingPreviews(await window.desktopApi.workflow.listPending());
+      await refreshAudit();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to record approval decision.");
     }
   };
 
@@ -366,6 +385,25 @@ function App(): JSX.Element {
             </div>
           )}
         </article>
+      </section>
+
+      <section className="card integrations-card">
+        <div className="card-heading">
+          <div><p className="eyebrow">PENDING APPROVALS</p><h2>Durable workflow queue</h2></div>
+          <span className="badge warning">{pendingPreviews.length} waiting</span>
+        </div>
+        {pendingPreviews.length === 0 ? <p className="muted">No pending approvals.</p> : pendingPreviews.map((item) => (
+          <div className="integration-row" key={item.preview.id}>
+            <div>
+              <strong>{item.preview.action} · {item.preview.target}</strong>
+              <p className="muted">{item.preview.source.toUpperCase()} · {item.preview.summary}</p>
+            </div>
+            <div className="actions">
+              <button className="button danger" onClick={() => void decidePending(item, "reject")} disabled={busy}>Reject</button>
+              <button className="button approve" onClick={() => void decidePending(item, "approve")} disabled={busy}>Approve</button>
+            </div>
+          </div>
+        ))}
       </section>
 
       <section className="card integrations-card">

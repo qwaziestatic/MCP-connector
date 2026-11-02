@@ -6,6 +6,7 @@ const sendDocumentTextSetting = "mcpConnector.sendDocumentText";
 const tokenSecretKey = "mcpConnector.bearerToken";
 const maxSelectedTextLength = 64 * 1024;
 const maxDocumentTextLength = 256 * 1024;
+const maxMessageBytes = 512 * 1024;
 
 let socket: WebSocket | undefined;
 let statusBarItem: vscode.StatusBarItem;
@@ -21,8 +22,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("mcpConnector.connect", () => connect(context)),
     vscode.commands.registerCommand("mcpConnector.disconnect", () => disconnect()),
     vscode.commands.registerCommand("mcpConnector.configure", () => configure(context)),
-    vscode.window.onDidChangeActiveTextEditor(() => scheduleContextSend(context)),
-    vscode.window.onDidChangeTextEditorSelection(() => scheduleContextSend(context)),
+    vscode.window.onDidChangeActiveTextEditor(() => scheduleContextSend()),
+    vscode.window.onDidChangeTextEditorSelection(() => scheduleContextSend()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(endpointSetting)) {
         disconnect();
@@ -72,7 +73,7 @@ async function connect(context: vscode.ExtensionContext): Promise<void> {
   socket = nextSocket;
   nextSocket.once("open", () => {
     updateStatus("Connected");
-    scheduleContextSend(context);
+    scheduleContextSend();
   });
   nextSocket.on("close", () => {
     if (socket === nextSocket) socket = undefined;
@@ -91,15 +92,15 @@ function disconnect(): void {
   updateStatus("Disconnected");
 }
 
-function scheduleContextSend(context: vscode.ExtensionContext): void {
+function scheduleContextSend(): void {
   if (sendTimer !== undefined) clearTimeout(sendTimer);
   sendTimer = setTimeout(() => {
     sendTimer = undefined;
-    void sendActiveContext(context);
+    void sendActiveContext();
   }, 150);
 }
 
-async function sendActiveContext(context: vscode.ExtensionContext): Promise<void> {
+async function sendActiveContext(): Promise<void> {
   if (socket?.readyState !== WebSocket.OPEN) return;
   const editor = vscode.window.activeTextEditor;
   const workspaceFolder = editor === undefined
@@ -115,9 +116,24 @@ async function sendActiveContext(context: vscode.ExtensionContext): Promise<void
     selectedText: editor.document.getText(editor.selection).slice(0, maxSelectedTextLength)
   };
   if (vscode.workspace.getConfiguration().get<boolean>(sendDocumentTextSetting, false)) {
-    message.documentText = editor.document.getText().slice(0, maxDocumentTextLength);
+    const documentText = editor.document.getText();
+    message.documentText = documentText.slice(0, maxDocumentTextLength);
+    while (
+      Buffer.byteLength(JSON.stringify(message), "utf8") > maxMessageBytes
+      && message.documentText.length > 0
+    ) {
+      message.documentText = message.documentText.slice(
+        0,
+        Math.floor(message.documentText.length * 0.9)
+      );
+    }
   }
-  socket.send(JSON.stringify(message));
+  const serialized = JSON.stringify(message);
+  if (Buffer.byteLength(serialized, "utf8") > maxMessageBytes) {
+    void vscode.window.showWarningMessage("The active editor context is too large to send.");
+    return;
+  }
+  socket.send(serialized);
 }
 
 function getEndpoint(): string {

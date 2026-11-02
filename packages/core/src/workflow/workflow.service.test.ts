@@ -50,6 +50,38 @@ describe("WorkflowService", () => {
 
     const records = await repository.list();
     expect(records[0]?.status).toBe("FAILED");
+    await expect(service.executeApproved(preview.id, async () => "retry")).rejects.toThrow("already failed");
+  });
+
+  it("runs an approved preview only once when executions overlap", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("UPDATE", "target", "Update target", {});
+    await service.approve(preview.id);
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const first = service.executeApproved(preview.id, async () => {
+      calls += 1;
+      await blocked;
+      return "done";
+    });
+
+    await expect(service.executeApproved(preview.id, async () => "duplicate")).rejects.toThrow("already executing");
+    release();
+    await expect(first).resolves.toBe("done");
+    expect(calls).toBe(1);
+  });
+
+  it("lists durable pending previews with source and never executes on approval", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "target", "Create target", {}, "mcp");
+    const before = await service.listPending();
+    expect(before[0]).toMatchObject({ preview, status: "PREVIEWED" });
+    await service.approve(preview.id);
+    const after = await service.listPending();
+    expect(after[0]).toMatchObject({ preview: { id: preview.id, source: "mcp" }, status: "APPROVED" });
   });
 
   it("restores an approved preview after the service is recreated", async () => {

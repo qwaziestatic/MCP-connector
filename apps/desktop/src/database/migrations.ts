@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 
-const migrations = [
+export const migrations = [
   {
     id: "20261008220000_create_audit_log",
     statements: [
@@ -14,6 +14,38 @@ const migrations = [
       )`,
       `CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx"
        ON "AuditLog" ("createdAt")`
+    ]
+  },
+  {
+    id: "20261008220001_create_workflow_preview",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "WorkflowPreview" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "action" TEXT NOT NULL,
+        "target" TEXT NOT NULL,
+        "summary" TEXT NOT NULL,
+        "payloadJson" TEXT NOT NULL,
+        "requiresApproval" BOOLEAN NOT NULL,
+        "createdAt" DATETIME NOT NULL,
+        "approvedAt" DATETIME,
+        "rejectedAt" DATETIME,
+        "executedAt" DATETIME,
+        "failedAt" DATETIME
+      )`,
+      `CREATE INDEX IF NOT EXISTS "WorkflowPreview_createdAt_idx"
+       ON "WorkflowPreview" ("createdAt")`
+    ]
+  },
+  {
+    id: "20261008220002_add_workflow_preview_executing_at",
+    statements: [
+      `ALTER TABLE "WorkflowPreview" ADD COLUMN "executingAt" DATETIME`
+    ]
+  },
+  {
+    id: "20261008220003_add_workflow_preview_source",
+    statements: [
+      `ALTER TABLE "WorkflowPreview" ADD COLUMN "source" TEXT NOT NULL DEFAULT 'ui'`
     ]
   }
 ] as const;

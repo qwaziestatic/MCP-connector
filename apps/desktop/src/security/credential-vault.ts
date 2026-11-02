@@ -1,4 +1,5 @@
 import { app, safeStorage } from "electron";
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -15,15 +16,18 @@ type CredentialFile = Record<string, string>;
 
 export class CredentialVault {
   private readonly filePath = join(app.getPath("userData"), "credentials.json");
+  private writeQueue: Promise<void> = Promise.resolve();
 
   async save(credential: StoredCredential): Promise<void> {
     if (!safeStorage.isEncryptionAvailable()) {
       throw new Error("Windows credential encryption is unavailable.");
     }
 
-    const contents: CredentialFile = await this.readFile();
-    contents[credential.provider] = safeStorage.encryptString(JSON.stringify(credential)).toString("base64");
-    await this.writeFile(contents);
+    await this.enqueueWrite(async () => {
+      const contents: CredentialFile = await this.readFile();
+      contents[credential.provider] = safeStorage.encryptString(JSON.stringify(credential)).toString("base64");
+      await this.writeFile(contents);
+    });
   }
 
   async get(provider: StoredCredential["provider"]): Promise<StoredCredential | null> {
@@ -45,9 +49,11 @@ export class CredentialVault {
   }
 
   async remove(provider: StoredCredential["provider"]): Promise<void> {
-    const contents = await this.readFile();
-    delete contents[provider];
-    await this.writeFile(contents);
+    await this.enqueueWrite(async () => {
+      const contents = await this.readFile();
+      delete contents[provider];
+      await this.writeFile(contents);
+    });
   }
 
   async has(provider: StoredCredential["provider"]): Promise<boolean> {
@@ -71,9 +77,15 @@ export class CredentialVault {
 
   private async writeFile(contents: CredentialFile): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    const temporaryPath = `${this.filePath}.${process.pid}.tmp`;
+    const temporaryPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporaryPath, JSON.stringify(contents), { encoding: "utf8", mode: 0o600 });
     await rename(temporaryPath, this.filePath);
+  }
+
+  private enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const next = this.writeQueue.then(operation, operation);
+    this.writeQueue = next.catch(() => undefined);
+    return next;
   }
 
   private isCredential(value: unknown, provider: StoredCredential["provider"]): value is StoredCredential {

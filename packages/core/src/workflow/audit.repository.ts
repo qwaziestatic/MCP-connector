@@ -26,6 +26,10 @@ export class InMemoryAuditRepository implements AuditRepository, WorkflowPreview
     return this.previews.get(id);
   }
 
+  async listPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
+    return [...this.previews.values()];
+  }
+
   async markApproved(id: string, approvedAt: string): Promise<void> {
     const record = this.requirePreview(id);
     this.previews.set(id, { ...record, approvedAt });
@@ -33,13 +37,32 @@ export class InMemoryAuditRepository implements AuditRepository, WorkflowPreview
 
   async markRejected(id: string, rejectedAt: string): Promise<void> {
     const record = this.requirePreview(id);
-    const { approvedAt: _approvedAt, ...unapprovedRecord } = record;
-    this.previews.set(id, { ...unapprovedRecord, rejectedAt });
+    this.previews.set(id, { preview: record.preview, rejectedAt });
   }
 
   async markExecuted(id: string, executedAt: string): Promise<void> {
     const record = this.requirePreview(id);
     this.previews.set(id, { ...record, executedAt });
+  }
+
+  async markExecuting(id: string, executingAt: string): Promise<void> {
+    const record = this.requirePreview(id);
+    this.previews.set(id, { ...record, executingAt });
+  }
+
+  async claimExecution(id: string, executingAt: string): Promise<boolean> {
+    const record = this.requirePreview(id);
+    if (
+      record.approvedAt === undefined
+      || record.rejectedAt !== undefined
+      || record.executingAt !== undefined
+      || record.executedAt !== undefined
+      || record.failedAt !== undefined
+    ) {
+      return false;
+    }
+    this.previews.set(id, { ...record, executingAt });
+    return true;
   }
 
   async markFailed(id: string, failedAt: string): Promise<void> {

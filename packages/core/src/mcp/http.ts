@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { JSONRPCMessage, MessageExtraInfo } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -23,6 +23,13 @@ function unauthorized(response: ServerResponse): void {
     "www-authenticate": "Bearer"
   });
   response.end(JSON.stringify({ error: "Unauthorized" }));
+}
+
+function tokensMatch(provided: string, expected: string): boolean {
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  return providedBuffer.length === expectedBuffer.length
+    && timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 class McpTransportAdapter implements Transport {
@@ -75,12 +82,21 @@ export async function startMcpHttpServer(
   const bearerToken = options.bearerToken ?? randomBytes(32).toString("base64url");
   const port = options.port ?? 0;
   const server: Server = createServer(async (request, response) => {
-    if (request.url !== "/mcp" || request.method !== "POST") {
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (requestUrl.pathname !== "/mcp") {
       response.writeHead(404).end();
       return;
     }
+    if (request.method !== "POST") {
+      response.writeHead(405, { Allow: "POST" }).end();
+      return;
+    }
 
-    if (request.headers.authorization !== `Bearer ${bearerToken}`) {
+    const authorization = request.headers.authorization;
+    if (
+      typeof authorization !== "string"
+      || !tokensMatch(authorization, `Bearer ${bearerToken}`)
+    ) {
       unauthorized(response);
       return;
     }

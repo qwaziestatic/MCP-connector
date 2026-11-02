@@ -24,9 +24,11 @@ model WorkflowPreview {
   summary          String
   payloadJson      String
   requiresApproval Boolean
+  source           String @default("ui")
   createdAt        DateTime
   approvedAt       DateTime?
   rejectedAt       DateTime?
+  executingAt      DateTime?
   executedAt       DateTime?
   failedAt         DateTime?
 
