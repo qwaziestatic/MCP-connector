@@ -64,4 +64,34 @@ describe("FilesystemService", () => {
       "outside the user-selected workspace"
     );
   });
+
+  it.runIf(process.platform === "win32")("rejects paths on a different drive", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "mcp-connector-"));
+    temporaryDirectories.push(workspace);
+    const otherDrive = workspace.toUpperCase().startsWith("Z:") ? "Y:\\" : "Z:\\";
+    const service = new FilesystemService();
+    service.setAllowedWorkspaceRoot(workspace);
+
+    await expect(service.inspectWorkspace(otherDrive)).rejects.toThrow(
+      "outside the user-selected workspace"
+    );
+    expect(() => service.resolveWorkspaceFile(workspace, `${otherDrive}outside.txt`)).toThrow(
+      "outside the selected workspace"
+    );
+  });
+
+  it("rejects workspace paths that traverse a junction out of the selected root", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "mcp-connector-"));
+    const outside = await mkdtemp(join(tmpdir(), "mcp-connector-outside-"));
+    temporaryDirectories.push(workspace, outside);
+    await mkdir(join(outside, "nested"));
+    await writeFile(join(outside, "nested", "secret.txt"), "secret");
+    await symlink(outside, join(workspace, "linked"), "junction");
+    const service = new FilesystemService();
+    service.setAllowedWorkspaceRoot(workspace);
+
+    await expect(service.inspectWorkspace(join(workspace, "linked", "nested"))).rejects.toThrow(
+      "outside the user-selected workspace"
+    );
+  });
 });

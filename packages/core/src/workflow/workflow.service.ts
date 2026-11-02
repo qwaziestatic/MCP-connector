@@ -224,7 +224,8 @@ export class WorkflowService {
       return inMemory;
     }
     const persisted = await this.previewRepository?.get(previewId);
-    if (persisted === undefined) {
+    // Rejected previews are final; they must not be reloaded and re-approved.
+    if (persisted === undefined || persisted.rejectedAt !== undefined) {
       return undefined;
     }
     const pending = this.fromPersisted(persisted);

@@ -1,5 +1,5 @@
-import { lstat, readdir, readFile } from "node:fs/promises";
-import { dirname, relative, resolve, sep } from "node:path";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export interface WorkspaceEntry {
   readonly relativePath: string;
@@ -33,7 +33,12 @@ function assertWorkspacePath(workspacePath: string): string {
 
 function isWithinWorkspace(workspacePath: string, candidatePath: string): boolean {
   const relativePath = relative(workspacePath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith(`..${sep}`) && relativePath !== "..");
+  // On Windows, paths on different drives produce an absolute relative path.
+  return relativePath === "" || (
+    !isAbsolute(relativePath)
+    && !relativePath.startsWith(`..${sep}`)
+    && relativePath !== ".."
+  );
 }
 
 async function walkDirectory(
@@ -106,6 +111,16 @@ export class FilesystemService {
 
     if (!metadata.isDirectory()) {
       throw new Error("Workspace path must refer to a directory.");
+    }
+    if (
+      this.allowedWorkspaceRoot !== undefined
+      && !isWithinWorkspace(
+        await realpath(this.allowedWorkspaceRoot),
+        await realpath(normalizedWorkspacePath)
+      )
+    ) {
+      // A symlink or junction in an intermediate path component can escape the root.
+      throw new Error("Workspace path is outside the user-selected workspace.");
     }
 
     const entries: WorkspaceEntry[] = [];
