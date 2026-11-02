@@ -22,6 +22,14 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+function formatPayload(payload: Readonly<Record<string, unknown>>): string {
+  return Object.entries(payload)
+    .map(([key, value]) => typeof value === "string"
+      ? `${key}:${value.includes("\n") ? "\n" : " "}${value}`
+      : `${key}: ${JSON.stringify(value, null, 2)}`)
+    .join("\n");
+}
+
 function App(): JSX.Element {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
@@ -373,7 +381,7 @@ function App(): JSX.Element {
               <div className="preview-row"><span>Action</span><strong>{preview.action}</strong></div>
               <div className="preview-row"><span>Target</span><strong>{preview.target}</strong></div>
               <p>{preview.summary}</p>
-              <pre>{JSON.stringify(preview.payload, null, 2)}</pre>
+              <pre>{formatPayload(preview.payload)}</pre>
               <div className="actions">
                 <button className="button danger" onClick={() => void decidePreview("reject")} disabled={busy}>Reject</button>
                 {approvedPreviewId === preview.id ? (
@@ -394,13 +402,18 @@ function App(): JSX.Element {
         </div>
         {pendingPreviews.length === 0 ? <p className="muted">No pending approvals.</p> : pendingPreviews.map((item) => (
           <div className="integration-row" key={item.preview.id}>
-            <div>
+            <div className="queue-item">
               <strong>{item.preview.action} · {item.preview.target}</strong>
               <p className="muted">{item.preview.source.toUpperCase()} · {item.preview.summary}</p>
+              <pre className="queue-details">{formatPayload(item.preview.payload)}</pre>
             </div>
             <div className="actions">
               <button className="button danger" onClick={() => void decidePending(item, "reject")} disabled={busy}>Reject</button>
-              <button className="button approve" onClick={() => void decidePending(item, "approve")} disabled={busy}>Approve</button>
+              {item.status === "APPROVED" ? (
+                <span className="badge success">Approved</span>
+              ) : (
+                <button className="button approve" onClick={() => void decidePending(item, "approve")} disabled={busy}>Approve</button>
+              )}
             </div>
           </div>
         ))}
