@@ -26,8 +26,12 @@ export class InMemoryAuditRepository implements AuditRepository, WorkflowPreview
     return this.previews.get(id);
   }
 
-  async listPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
-    return [...this.previews.values()];
+  async listOpenPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
+    return [...this.previews.values()].filter((record) =>
+      record.rejectedAt === undefined
+      && record.executingAt === undefined
+      && record.executedAt === undefined
+      && record.failedAt === undefined);
   }
 
   async markApproved(id: string, approvedAt: string): Promise<void> {

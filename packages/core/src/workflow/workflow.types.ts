@@ -36,7 +36,8 @@ export interface WorkflowPreviewRepository {
   markExecuting(id: string, executingAt: string): Promise<void>;
   markExecuted(id: string, executedAt: string): Promise<void>;
   markFailed(id: string, failedAt: string): Promise<void>;
-  listPreviews(): Promise<readonly WorkflowPreviewRecord[]>;
+  /** Previews not yet rejected, executing, executed or failed. */
+  listOpenPreviews(): Promise<readonly WorkflowPreviewRecord[]>;
 }
 
 export interface WorkflowPreviewRecord {

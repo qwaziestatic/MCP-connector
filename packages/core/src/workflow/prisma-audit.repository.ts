@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, WorkflowPreview as WorkflowPreviewRow } from "@prisma/client";
 import type {
   AuditRecord,
   AuditRepository,
@@ -55,9 +55,19 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
 
   async get(id: string): Promise<WorkflowPreviewRecord | undefined> {
     const record = await this.prisma.workflowPreview.findUnique({ where: { id } });
-    if (record === null) {
-      return undefined;
-    }
+    return record === null ? undefined : this.toRecord(record);
+  }
+
+  /** Previews still waiting for a decision or execution, in one query. */
+  async listOpenPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
+    const records = await this.prisma.workflowPreview.findMany({
+      where: { rejectedAt: null, executingAt: null, executedAt: null, failedAt: null },
+      orderBy: { createdAt: "desc" }
+    });
+    return records.map((record) => this.toRecord(record));
+  }
+
+  private toRecord(record: WorkflowPreviewRow): WorkflowPreviewRecord {
     return {
       preview: {
         id: record.id,
@@ -75,11 +85,6 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
       ...(record.executedAt === null ? {} : { executedAt: record.executedAt.toISOString() }),
       ...(record.failedAt === null ? {} : { failedAt: record.failedAt.toISOString() })
     };
-  }
-
-  async listPreviews(): Promise<readonly WorkflowPreviewRecord[]> {
-    const records = await this.prisma.workflowPreview.findMany({ orderBy: { createdAt: "desc" } });
-    return Promise.all(records.map(async (record) => (await this.get(record.id))!));
   }
 
   async markApproved(id: string, approvedAt: string): Promise<void> {
