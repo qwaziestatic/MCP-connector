@@ -16,7 +16,9 @@ const desktopApi: DesktopApi = {
     chooseWorkspace: () =>
       ipcRenderer.invoke("filesystem:choose-workspace") as Promise<string | null>,
     inspectWorkspace: (workspacePath) =>
-      ipcRenderer.invoke("filesystem:inspect-workspace", workspacePath)
+      ipcRenderer.invoke("filesystem:inspect-workspace", workspacePath),
+    getSelectedWorkspace: () =>
+      ipcRenderer.invoke("filesystem:get-selected-workspace") as Promise<string | null>
   },
   workflow: {
     createPreview: (action, target, summary, payload) =>
@@ -29,6 +31,8 @@ const desktopApi: DesktopApi = {
       ipcRenderer.on("workflow:changed", callback);
       return () => ipcRenderer.removeListener("workflow:changed", callback);
     },
+    createNotionPagePreview: (title, markdown) =>
+      ipcRenderer.invoke("notion:create-page-preview", title, markdown),
     executeApproved: (previewId) => ipcRenderer.invoke("workflow:execute-approved", previewId),
     listAuditRecords: () => ipcRenderer.invoke("workflow:list-audit-records")
   },

@@ -32,7 +32,12 @@ export class OAuthPkceService {
     url.searchParams.set("state", state);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");
-    url.searchParams.set("scope", config.scopes.join(" "));
+    if (config.scopes.length > 0) {
+      url.searchParams.set("scope", config.scopes.join(" "));
+    }
+    for (const [name, value] of Object.entries(config.authorizationParams ?? {})) {
+      url.searchParams.set(name, value);
+    }
 
     this.pending.set(state, { provider, codeVerifier, createdAt: Date.now() });
     return { provider, state, codeVerifier, authorizationUrl: url.toString() };

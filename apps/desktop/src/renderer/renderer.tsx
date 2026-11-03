@@ -22,8 +22,13 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+// Notion pages show their readable content; the raw block list that will be
+// sent is generated from the same data and is not repeated here.
+const hiddenPayloadKeys = new Set(["notionBlocks"]);
+
 function formatPayload(payload: Readonly<Record<string, unknown>>): string {
   return Object.entries(payload)
+    .filter(([key]) => !hiddenPayloadKeys.has(key))
     .map(([key, value]) => typeof value === "string"
       ? `${key}:${value.includes("\n") ? "\n" : " "}${value}`
       : `${key}: ${JSON.stringify(value, null, 2)}`)
@@ -108,6 +113,18 @@ function App(): JSX.Element {
 
   useEffect(() => window.desktopApi.workflow.subscribe(setPendingPreviews), []);
 
+  // Show the workspace remembered from an earlier session.
+  useEffect(() => {
+    void (async () => {
+      const selectedPath = await window.desktopApi.filesystem.getSelectedWorkspace();
+      if (selectedPath === null) return;
+      setWorkspacePath(selectedPath);
+      setSnapshot(await window.desktopApi.filesystem.inspectWorkspace(selectedPath));
+    })().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Unable to inspect the saved workspace.");
+    });
+  }, []);
+
   useEffect(() => {
     if (updaterStatus.phase !== "checking" && updaterStatus.phase !== "downloading") {
       return;
@@ -162,15 +179,9 @@ function App(): JSX.Element {
     setError(null);
     setBusy(true);
     try {
-      const nextPreview = await window.desktopApi.workflow.createPreview(
-        "CREATE",
-        "Notion project page",
-        `Create a project page from ${workspacePath}`,
-        {
-          workspacePath,
-          readme: snapshot.readme,
-          fileCount: snapshot.entries.filter((entry) => entry.type === "file").length
-        }
+      const nextPreview = await window.desktopApi.workflow.createNotionPagePreview(
+        workspacePath.split(/[\\/]/u).filter((part) => part.length > 0).pop() ?? "Project",
+        snapshot.readme ?? "No README was found for this workspace."
       );
       setPreview(nextPreview);
       setPendingPreviews(await window.desktopApi.workflow.listPending());

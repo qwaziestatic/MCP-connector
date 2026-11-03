@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
 import {
+  createNotionPagePreview,
+  executeNotionPagePreview,
   FilesystemService,
   FetchOAuthTokenService,
   OfficialNotionConnector,
@@ -19,6 +21,8 @@ import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
 import { AutoUpdateService } from "./updater/auto-update.service";
+import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
+import { AppSettingsStore } from "./settings/app-settings";
 import type { McpConnectorDependencies, McpHttpServerHandle } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -30,8 +34,6 @@ const oauthTokenService = new FetchOAuthTokenService();
 let mcpHttpServer: McpHttpServerHandle | null = null;
 let vsCodeContextServer: VsCodeContextServerHandle | null = null;
 let autoUpdateService: AutoUpdateService | null = null;
-
-const developmentRendererOrigin = "http://localhost:5173";
 
 function isAllowedRendererUrl(value: string): boolean {
   try {
@@ -46,17 +48,7 @@ function isAllowedRendererUrl(value: string): boolean {
 }
 
 function configureElectronSecurity(): void {
-  const contentSecurityPolicy = [
-    "default-src 'self'",
-    `script-src 'self'${isDevelopment ? ` ${developmentRendererOrigin}` : ""}`,
-    "style-src 'self'",
-    "img-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? ` ${developmentRendererOrigin} ws://localhost:5173` : ""}`,
-    "font-src 'self'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "frame-ancestors 'none'"
-  ].join("; ");
+  const contentSecurityPolicy = buildContentSecurityPolicy(isDevelopment ? "development" : "production");
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -96,7 +88,9 @@ function getOAuthConfig(provider: "github" | "notion") {
         authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
         tokenEndpoint: "https://api.notion.com/v1/oauth/token",
         clientId,
-        scopes: []
+        scopes: [],
+        // Notion requires owner=user on every authorization request.
+        authorizationParams: { owner: "user" }
       };
   return clientSecret === undefined ? config : { ...config, clientSecret };
 }
@@ -112,7 +106,8 @@ function registerIpcHandlers(
   credentialVault: CredentialVault,
   oauthCallbackServer: OAuthCallbackServer,
   getNotionConnector: () => OfficialNotionConnector,
-  getMcpDependencies: () => McpConnectorDependencies
+  getMcpDependencies: () => McpConnectorDependencies,
+  settings: AppSettingsStore
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
@@ -157,9 +152,13 @@ function registerIpcHandlers(
     const workspacePath = result.filePaths[0] ?? null;
     if (workspacePath !== null) {
       filesystemService.setAllowedWorkspaceRoot(workspacePath);
+      await settings.update({ workspacePath });
     }
     return workspacePath;
   });
+
+  ipcMain.handle("filesystem:get-selected-workspace", () =>
+    filesystemService.getAllowedWorkspaceRoot() ?? null);
 
   ipcMain.handle("filesystem:inspect-workspace", async (_event, workspacePath: unknown) => {
     if (typeof workspacePath !== "string") {
@@ -215,21 +214,21 @@ function registerIpcHandlers(
       throw new Error("Preview ID must be a string.");
     }
 
-    return workflowService.executeApproved(previewId, async (preview) => {
-      if (preview.action !== "CREATE" || preview.target !== "Notion project page") {
-        throw new Error("No executor is registered for this workflow target.");
-      }
+    // Resolve the connector before claiming the approval: execution failures
+    // are final, so a missing Notion setting must not use up the approval.
+    const notion = getNotionConnector();
+    // The same executor as the MCP tool: it sends the stored blocks unchanged.
+    return workflowService.executeApproved(
+      previewId,
+      (preview) => executeNotionPagePreview(preview, notion)
+    );
+  });
 
-      const readme = typeof preview.payload.readme === "string"
-        ? preview.payload.readme
-        : "No README was found for this workspace.";
-      return getNotionConnector().createPage({
-        title: typeof preview.payload.workspacePath === "string"
-          ? preview.payload.workspacePath.split(/[\\/]/u).pop() ?? "Project"
-          : "Project",
-        markdown: readme
-      });
-    });
+  ipcMain.handle("notion:create-page-preview", async (_event, title: unknown, markdown: unknown) => {
+    if (typeof title !== "string" || typeof markdown !== "string") {
+      throw new Error("Invalid Notion page preview request.");
+    }
+    return createNotionPagePreview(workflowService, { title, markdown }, "ui");
   });
 
   ipcMain.handle("credentials:get-status", async () => ({
@@ -366,6 +365,13 @@ app.whenReady().then(async () => {
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
     const oauthCallbackServer = new OAuthCallbackServer();
+    const settings = new AppSettingsStore(join(app.getPath("userData"), "settings.json"));
+    // Restore the workspace chosen in an earlier session, so MCP tools work
+    // after a restart without the user choosing it again.
+    const savedWorkspace = await settings.readExistingWorkspace();
+    if (savedWorkspace !== undefined) {
+      filesystemService.setAllowedWorkspaceRoot(savedWorkspace);
+    }
     const getNotionConnector = (): OfficialNotionConnector => {
       const notionDatabaseId = getNotionDatabaseId();
       if (notionDatabaseId === undefined) {
@@ -400,7 +406,8 @@ app.whenReady().then(async () => {
       credentialVault,
       oauthCallbackServer,
       getNotionConnector,
-      getMcpDependencies
+      getMcpDependencies,
+      settings
     );
     if (process.env.MCP_HTTP_ENABLED === "true") {
       mcpHttpServer = await startMcpHttpServer(getMcpDependencies());

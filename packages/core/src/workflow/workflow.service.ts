@@ -15,6 +15,7 @@ const actionSchema = z.enum(["READ", "CREATE", "UPDATE", "DELETE", "UPLOAD"]);
 interface PendingWorkflow {
   readonly preview: WorkflowPreview;
   approved: boolean;
+  rejected: boolean;
   executing: boolean;
   executed: boolean;
   failed: boolean;
@@ -58,7 +59,14 @@ export class WorkflowService {
       createdAt: new Date().toISOString()
     };
 
-    this.pending.set(preview.id, { preview, approved: false, executing: false, executed: false, failed: false });
+    this.pending.set(preview.id, {
+      preview,
+      approved: false,
+      rejected: false,
+      executing: false,
+      executed: false,
+      failed: false
+    });
     if (this.previewRepository !== undefined) {
       await this.previewRepository.createPreview(preview);
     }
@@ -70,7 +78,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(preview),
       createdAt: preview.createdAt
     });
-    this.notify();
+    await this.notify();
 
     return preview;
   }
@@ -79,6 +87,16 @@ export class WorkflowService {
     const pending = await this.getPending(previewId);
     if (pending === undefined) {
       throw new Error("Workflow preview was not found or has expired.");
+    }
+    if (pending.rejected) {
+      throw new Error("This workflow preview was rejected and cannot be approved.");
+    }
+    if (pending.executing || pending.executed || pending.failed) {
+      throw new Error("This workflow preview has already run and cannot be approved again.");
+    }
+    if (pending.approved) {
+      // Approving twice (for example a double click) must not add audit records.
+      return pending.preview;
     }
 
     pending.approved = true;
@@ -91,7 +109,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
-    this.notify();
+    await this.notify();
 
     return pending.preview;
   }
@@ -101,8 +119,16 @@ export class WorkflowService {
     if (pending === undefined) {
       throw new Error("Workflow preview was not found or has expired.");
     }
+    if (pending.rejected) {
+      throw new Error("This workflow preview was already rejected.");
+    }
+    if (pending.executing || pending.executed || pending.failed) {
+      throw new Error("This workflow preview has already run and can no longer be rejected.");
+    }
 
-    this.pending.delete(previewId);
+    // Keep the rejected preview so its status can still be reported as REJECTED.
+    pending.rejected = true;
+    pending.approved = false;
     await this.previewRepository?.markRejected(previewId, new Date().toISOString());
     await this.auditRepository.create({
       id: randomUUID(),
@@ -112,7 +138,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
-    this.notify();
+    await this.notify();
 
     return pending.preview;
   }
@@ -162,7 +188,7 @@ export class WorkflowService {
         previewJson: JSON.stringify({ preview: pending.preview, result }),
         createdAt: new Date().toISOString()
       });
-      this.notify();
+      await this.notify();
       return result;
     } catch (error) {
       pending.executing = false;
@@ -176,7 +202,7 @@ export class WorkflowService {
         previewJson: JSON.stringify(pending.preview),
         createdAt: new Date().toISOString()
       });
-      this.notify();
+      await this.notify();
       throw error;
     }
   }
@@ -209,6 +235,7 @@ export class WorkflowService {
   }
 
   private statusOf(pending: PendingWorkflow): WorkflowStatus {
+    if (pending.rejected) return "REJECTED";
     if (pending.failed) return "FAILED";
     if (pending.executed) return "EXECUTED";
     if (pending.executing) return "EXECUTING";
@@ -216,17 +243,25 @@ export class WorkflowService {
     return "PREVIEWED";
   }
 
-  private notify(): void {
-    void this.listPending().then((state) => this.listeners.forEach((listener) => listener(state)));
+  // Awaited by every state change, so the refresh query cannot outlive the call
+  // that caused it (for example, run after the database is closed).
+  private async notify(): Promise<void> {
+    if (this.listeners.size === 0) return;
+    try {
+      const state = await this.listPending();
+      this.listeners.forEach((listener) => listener(state));
+    } catch {
+      // The state change is already stored; listeners get the next successful refresh.
+    }
   }
+
   private async getPending(previewId: string): Promise<PendingWorkflow | undefined> {
     const inMemory = this.pending.get(previewId);
     if (inMemory !== undefined) {
       return inMemory;
     }
     const persisted = await this.previewRepository?.get(previewId);
-    // Rejected previews are final; they must not be reloaded and re-approved.
-    if (persisted === undefined || persisted.rejectedAt !== undefined) {
+    if (persisted === undefined) {
       return undefined;
     }
     const pending = this.fromPersisted(persisted);
@@ -235,9 +270,11 @@ export class WorkflowService {
   }
 
   private fromPersisted(record: WorkflowPreviewRecord): PendingWorkflow {
+    // Rejected previews are final: they load as rejected and can never be approved.
     return {
       preview: record.preview,
       approved: record.approvedAt !== undefined && record.rejectedAt === undefined,
+      rejected: record.rejectedAt !== undefined,
       executing: record.executingAt !== undefined && record.executedAt === undefined && record.failedAt === undefined,
       executed: record.executedAt !== undefined,
       failed: record.failedAt !== undefined

@@ -30,7 +30,7 @@ describe("WorkflowService", () => {
     const preview = await service.createPreview("DELETE", "workspace/file.txt", "Delete file", {});
 
     await service.reject(preview.id);
-    await expect(service.approve(preview.id)).rejects.toThrow("not found or has expired");
+    await expect(service.approve(preview.id)).rejects.toThrow("was rejected");
 
     const records = await repository.list();
     expect(records[0]?.status).toBe("REJECTED");
@@ -104,7 +104,7 @@ describe("WorkflowService", () => {
     const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
     await service.reject(preview.id);
 
-    await expect(service.approve(preview.id)).rejects.toThrow("not found or has expired");
+    await expect(service.approve(preview.id)).rejects.toThrow("was rejected");
     await expect(
       service.executeApproved(preview.id, async () => "should not execute")
     ).rejects.toThrow("Explicit approval is required");
@@ -131,5 +131,67 @@ describe("WorkflowService", () => {
     await expect(
       restartedService.executeApproved(preview.id, async () => "should not execute")
     ).rejects.toThrow("Explicit approval is required");
+  });
+
+  it("reports REJECTED to agents instead of an unknown preview", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {}, "mcp");
+    await service.reject(preview.id);
+
+    expect(await service.getStatus(preview.id)).toBe("REJECTED");
+    expect(await new WorkflowService(repository, repository).getStatus(preview.id)).toBe("REJECTED");
+    await expect(service.getStatus("6b2c8f2e-1f1e-4c47-9b1a-6f1d2f3e4a5b")).rejects.toThrow("not found");
+  });
+
+  it("reports REJECTED without a preview repository", async () => {
+    const service = new WorkflowService(new InMemoryAuditRepository());
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {}, "mcp");
+    await service.reject(preview.id);
+
+    expect(await service.getStatus(preview.id)).toBe("REJECTED");
+    await expect(service.reject(preview.id)).rejects.toThrow("already rejected");
+  });
+
+  it("records one approval per preview and refuses to approve a preview that has run", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    await service.approve(preview.id);
+    await service.approve(preview.id);
+    await service.executeApproved(preview.id, async () => "done");
+
+    await expect(service.approve(preview.id)).rejects.toThrow("already run");
+    await expect(service.reject(preview.id)).rejects.toThrow("already run");
+    const approvals = (await repository.list()).filter((record) => record.status === "APPROVED");
+    expect(approvals).toHaveLength(1);
+    expect(await service.getStatus(preview.id)).toBe("EXECUTED");
+  });
+
+  it("notifies subscribers before each state change resolves", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const updates: string[][] = [];
+    service.subscribe((state) => updates.push(state.map((item) => item.status)));
+
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    expect(updates.at(-1)).toEqual(["PREVIEWED"]);
+    await service.approve(preview.id);
+    expect(updates.at(-1)).toEqual(["APPROVED"]);
+    await service.reject(preview.id);
+    expect(updates.at(-1)).toEqual([]);
+  });
+
+  it("keeps a state change when refreshing subscribers fails", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    repository.listPreviews = async () => {
+      throw new Error("database unavailable");
+    };
+    service.subscribe(() => undefined);
+
+    await expect(service.approve(preview.id)).resolves.toMatchObject({ id: preview.id });
+    expect(await service.getStatus(preview.id)).toBe("APPROVED");
   });
 });

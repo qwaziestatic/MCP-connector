@@ -41,6 +41,7 @@ export interface DesktopApi {
   readonly filesystem: {
     readonly chooseWorkspace: () => Promise<string | null>;
     readonly inspectWorkspace: (workspacePath: string) => Promise<WorkspaceSnapshot>;
+    readonly getSelectedWorkspace: () => Promise<string | null>;
   };
   readonly workflow: {
     readonly createPreview: (
@@ -53,6 +54,7 @@ export interface DesktopApi {
     readonly reject: (previewId: string) => Promise<WorkflowPreview>;
     readonly listPending: () => Promise<readonly WorkflowPreviewState[]>;
     readonly subscribe: (listener: (previews: readonly WorkflowPreviewState[]) => void) => () => void;
+    readonly createNotionPagePreview: (title: string, markdown: string) => Promise<WorkflowPreview>;
     readonly executeApproved: (previewId: string) => Promise<{ readonly pageId: string; readonly url: string | null }>;
     readonly listAuditRecords: () => Promise<readonly AuditRecord[]>;
   };

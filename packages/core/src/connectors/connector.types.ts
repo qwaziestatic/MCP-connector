@@ -7,6 +7,8 @@ export interface OAuthProviderConfig {
   readonly clientId: string;
   readonly clientSecret?: string;
   readonly scopes: readonly string[];
+  /** Extra query parameters a provider requires, such as Notion's owner=user. */
+  readonly authorizationParams?: Readonly<Record<string, string>>;
 }
 
 export interface OAuthAuthorizationRequest {
@@ -53,9 +55,21 @@ export interface GitHubRepositoryList {
   readonly truncated: boolean;
 }
 
+export interface NotionRichText {
+  readonly type: "text";
+  readonly text: { readonly content: string };
+}
+
+/** A Notion block in the shape the Notion API accepts when creating content. */
+export interface NotionBlock {
+  readonly object: "block";
+  readonly type: string;
+  readonly [blockType: string]: unknown;
+}
+
 export interface NotionPageDraft {
   readonly title: string;
-  readonly markdown: string;
+  readonly blocks: readonly NotionBlock[];
 }
 
 export interface GitHubConnector {
