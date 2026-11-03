@@ -7,6 +7,8 @@ export interface OAuthProviderConfig {
   readonly clientId: string;
   readonly clientSecret?: string;
   readonly scopes: readonly string[];
+  /** Extra query parameters a provider requires, such as Notion's owner=user. */
+  readonly authorizationParams?: Readonly<Record<string, string>>;
 }
 
 export interface OAuthAuthorizationRequest {

@@ -33,4 +33,18 @@ describe("OAuthPkceService", () => {
       "invalid or does not match"
     );
   });
+
+  it("adds provider-specific parameters and omits an empty scope", () => {
+    const service = new OAuthPkceService();
+    const request = service.beginAuthorization({
+      ...config,
+      provider: "notion",
+      scopes: [],
+      authorizationParams: { owner: "user" }
+    }, "http://127.0.0.1:1234/oauth/callback");
+    const authorizationUrl = new URL(request.authorizationUrl);
+
+    expect(authorizationUrl.searchParams.get("owner")).toBe("user");
+    expect(authorizationUrl.searchParams.has("scope")).toBe(false);
+  });
 });

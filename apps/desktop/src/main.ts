@@ -85,7 +85,9 @@ function getOAuthConfig(provider: "github" | "notion") {
         authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
         tokenEndpoint: "https://api.notion.com/v1/oauth/token",
         clientId,
-        scopes: []
+        scopes: [],
+        // Notion requires owner=user on every authorization request.
+        authorizationParams: { owner: "user" }
       };
   return clientSecret === undefined ? config : { ...config, clientSecret };
 }
