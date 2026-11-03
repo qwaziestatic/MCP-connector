@@ -1,8 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import {
   createNotionPagePreview,
   executeNotionPagePreview,
@@ -24,6 +23,8 @@ import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
 import { isStdioMode, runStdioMode, STDIO_FLAG } from "./stdio/stdio-mode";
+import { createFileLogger } from "./logging/file-logger";
+import { describeStartupError } from "./logging/startup-error";
 import type { McpConnectorDependencies } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -113,6 +114,10 @@ function registerIpcHandlers(
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("app:get-startup-problems", () => startupProblems);
+  ipcMain.handle("app:open-logs-folder", async () => {
+    const failure = await shell.openPath(app.getPath("logs"));
+    if (failure.length > 0) throw new Error(`Could not open the logs folder: ${failure}`);
+  });
   ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
     enabled: false,
     phase: "disabled",
@@ -333,15 +338,23 @@ function createMainWindow(): BrowserWindow {
 }
 
 async function startDesktopApp(): Promise<void> {
+  const log = createFileLogger(app.getPath("logs"));
+  log.info(`Starting MCP Connector ${app.getVersion()} on ${process.platform}.`);
+  process.on("uncaughtExceptionMonitor", (error) => log.error("Uncaught exception.", error));
   configureElectronSecurity();
   const databaseUrl = `file:${join(app.getPath("userData"), "mcp-connector.db")}`;
   process.env.DATABASE_URL = databaseUrl;
-  const prisma = new PrismaClient({
-    adapter: new PrismaBetterSqlite3({ url: databaseUrl })
-  });
+  let prisma: PrismaClient | null = null;
   autoUpdateService = new AutoUpdateService();
   try {
+    // Loaded here rather than at the top of the file, so a missing or broken
+    // database driver shows the startup error dialog below instead of
+    // Electron's generic "JavaScript error in the main process".
+    const { PrismaClient } = await import("@prisma/client");
+    const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
+    prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }) });
     await applyDatabaseMigrations(prisma);
+    log.info("Database ready.");
     const auditRepository = new PrismaAuditRepository(prisma);
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
@@ -389,7 +402,10 @@ async function startDesktopApp(): Promise<void> {
       onVsCodeContext: (context) => {
         console.log(`Accepted VS Code context for workspace: ${context.workspacePath}`);
       },
-      log: (message) => console.log(message)
+      log: (message) => {
+        console.log(message);
+        log.info(message);
+      }
     });
     connections = connectionManager;
     registerIpcHandlers(
@@ -406,7 +422,10 @@ async function startDesktopApp(): Promise<void> {
     startupProblems = await connectionManager.restoreOnLaunch({
       mcp: process.env.MCP_HTTP_ENABLED === "true"
     });
-    for (const problem of startupProblems) console.error(problem);
+    for (const problem of startupProblems) {
+      console.error(problem);
+      log.error(problem);
+    }
     if (autoUpdateService.getStatus().enabled) {
       try {
         await autoUpdateService.checkForUpdates();
@@ -416,12 +435,12 @@ async function startDesktopApp(): Promise<void> {
     }
     createMainWindow();
   } catch (error) {
+    // The packaged app has no visible console, so say what happened before quitting.
     console.error("MCP Connector could not start.", error);
-    dialog.showErrorBox(
-      "MCP Connector could not start",
-      error instanceof Error ? error.message : String(error)
-    );
-    await prisma.$disconnect();
+    log.error("Startup failed.", error);
+    const { title, message } = describeStartupError(error, app.getPath("userData"));
+    dialog.showErrorBox(title, `${message}\n\nDetails were saved to:\n${log.path}`);
+    await prisma?.$disconnect().catch(() => undefined);
     app.quit();
     return;
   }

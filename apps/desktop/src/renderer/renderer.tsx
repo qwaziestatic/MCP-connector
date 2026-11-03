@@ -522,6 +522,14 @@ export function App(): JSX.Element {
           >
             Install and restart
           </button>
+          <button
+            className="button ghost"
+            onClick={() => void window.desktopApi.app.openLogsFolder().catch((cause: unknown) => {
+              setError(cause instanceof Error ? cause.message : "Unable to open the logs folder.");
+            })}
+          >
+            Open logs folder
+          </button>
         </div>
       </section>
 
