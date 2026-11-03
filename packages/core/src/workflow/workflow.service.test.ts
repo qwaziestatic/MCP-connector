@@ -167,4 +167,31 @@ describe("WorkflowService", () => {
     expect(approvals).toHaveLength(1);
     expect(await service.getStatus(preview.id)).toBe("EXECUTED");
   });
+
+  it("notifies subscribers before each state change resolves", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const updates: string[][] = [];
+    service.subscribe((state) => updates.push(state.map((item) => item.status)));
+
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    expect(updates.at(-1)).toEqual(["PREVIEWED"]);
+    await service.approve(preview.id);
+    expect(updates.at(-1)).toEqual(["APPROVED"]);
+    await service.reject(preview.id);
+    expect(updates.at(-1)).toEqual([]);
+  });
+
+  it("keeps a state change when refreshing subscribers fails", async () => {
+    const repository = new InMemoryAuditRepository();
+    const service = new WorkflowService(repository, repository);
+    const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
+    repository.listPreviews = async () => {
+      throw new Error("database unavailable");
+    };
+    service.subscribe(() => undefined);
+
+    await expect(service.approve(preview.id)).resolves.toMatchObject({ id: preview.id });
+    expect(await service.getStatus(preview.id)).toBe("APPROVED");
+  });
 });

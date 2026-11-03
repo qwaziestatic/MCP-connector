@@ -78,7 +78,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(preview),
       createdAt: preview.createdAt
     });
-    this.notify();
+    await this.notify();
 
     return preview;
   }
@@ -109,7 +109,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
-    this.notify();
+    await this.notify();
 
     return pending.preview;
   }
@@ -138,7 +138,7 @@ export class WorkflowService {
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
-    this.notify();
+    await this.notify();
 
     return pending.preview;
   }
@@ -188,7 +188,7 @@ export class WorkflowService {
         previewJson: JSON.stringify({ preview: pending.preview, result }),
         createdAt: new Date().toISOString()
       });
-      this.notify();
+      await this.notify();
       return result;
     } catch (error) {
       pending.executing = false;
@@ -202,7 +202,7 @@ export class WorkflowService {
         previewJson: JSON.stringify(pending.preview),
         createdAt: new Date().toISOString()
       });
-      this.notify();
+      await this.notify();
       throw error;
     }
   }
@@ -243,9 +243,18 @@ export class WorkflowService {
     return "PREVIEWED";
   }
 
-  private notify(): void {
-    void this.listPending().then((state) => this.listeners.forEach((listener) => listener(state)));
+  // Awaited by every state change, so the refresh query cannot outlive the call
+  // that caused it (for example, run after the database is closed).
+  private async notify(): Promise<void> {
+    if (this.listeners.size === 0) return;
+    try {
+      const state = await this.listPending();
+      this.listeners.forEach((listener) => listener(state));
+    } catch {
+      // The state change is already stored; listeners get the next successful refresh.
+    }
   }
+
   private async getPending(previewId: string): Promise<PendingWorkflow | undefined> {
     const inMemory = this.pending.get(previewId);
     if (inMemory !== undefined) {
