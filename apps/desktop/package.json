@@ -56,7 +56,11 @@
       "out/**/*",
       "package.json",
       "node_modules/**/*",
-      "!node_modules/**/*.map"
+      "!node_modules/**/*.map",
+      {
+        "from": "../../node_modules/.prisma/client",
+        "to": "node_modules/.prisma/client"
+      }
     ],
     "win": {
       "signAndEditExecutable": false,
