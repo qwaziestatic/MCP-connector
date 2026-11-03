@@ -14,7 +14,16 @@ export interface StoredCredential {
 
 type CredentialFile = Record<string, string>;
 
-export class CredentialVault {
+/** Local secrets the app generates for itself, such as listener tokens. */
+export type LocalSecretName = "mcp-http-token" | "vscode-listener-token";
+
+/** The part of the vault that stores the app's own secrets. */
+export interface LocalSecretStore {
+  getSecret(name: LocalSecretName): Promise<string | null>;
+  saveSecret(name: LocalSecretName, value: string): Promise<void>;
+}
+
+export class CredentialVault implements LocalSecretStore {
   private readonly filePath = join(app.getPath("userData"), "credentials.json");
   private writeQueue: Promise<void> = Promise.resolve();
 
@@ -63,6 +72,31 @@ export class CredentialVault {
   async has(provider: StoredCredential["provider"]): Promise<boolean> {
     const contents = await this.readFile();
     return contents[provider] !== undefined;
+  }
+
+  async getSecret(name: LocalSecretName): Promise<string | null> {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
+      throw new Error("Windows credential encryption is unavailable.");
+    }
+    const encrypted = (await this.readFile())[`secret:${name}`];
+    if (encrypted === undefined) return null;
+    const decrypted = await safeStorage.decryptStringAsync(Buffer.from(encrypted, "base64"));
+    if (decrypted.shouldReEncrypt) {
+      await this.saveSecret(name, decrypted.result);
+    }
+    return decrypted.result;
+  }
+
+  async saveSecret(name: LocalSecretName, value: string): Promise<void> {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
+      throw new Error("Windows credential encryption is unavailable.");
+    }
+    const encrypted = await safeStorage.encryptStringAsync(value);
+    await this.enqueueWrite(async () => {
+      const contents = await this.readFile();
+      contents[`secret:${name}`] = encrypted.toString("base64");
+      await this.writeFile(contents);
+    });
   }
 
   private async readFile(): Promise<CredentialFile> {

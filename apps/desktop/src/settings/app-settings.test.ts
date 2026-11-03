@@ -48,6 +48,13 @@ describe("AppSettingsStore", () => {
     expect(await store.read()).toEqual({});
   });
 
+  it("drops only the invalid setting and keeps the rest", async () => {
+    const { filePath, store } = await createStore();
+    await writeFile(filePath, JSON.stringify({ workspacePath: "C:\\work", mcpPort: 99_999, mcpServerEnabled: true }));
+
+    expect(await store.read()).toEqual({ workspacePath: "C:\\work", mcpServerEnabled: true });
+  });
+
   it("does not throw when the settings file cannot be read", async () => {
     const { filePath } = await createStore();
     await mkdir(filePath);

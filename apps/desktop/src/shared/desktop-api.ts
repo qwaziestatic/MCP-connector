@@ -1,9 +1,22 @@
 import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 
+export interface ListenerStatus {
+  readonly enabled: boolean;
+  /** Null only when the port is set to 0 and the listener is stopped. */
+  readonly url: string | null;
+  readonly bearerToken: string;
+}
+
+export interface AgentConfigs {
+  readonly claudeCode: string;
+  readonly cursor: string;
+}
+
 export interface DesktopApi {
   readonly app: {
     readonly getVersion: () => Promise<string>;
+    readonly getStartupProblems: () => Promise<readonly string[]>;
   };
   readonly updater: {
     readonly getStatus: () => Promise<{
@@ -64,13 +77,15 @@ export interface DesktopApi {
     readonly disconnect: (provider: "github" | "notion") => Promise<void>;
   };
   readonly mcp: {
-    readonly getStatus: () => Promise<{ readonly enabled: boolean; readonly url: string | null; readonly bearerToken: string | null }>;
-    readonly start: () => Promise<{ readonly url: string; readonly bearerToken: string }>;
-    readonly stop: () => Promise<void>;
+    readonly getStatus: () => Promise<ListenerStatus>;
+    readonly start: () => Promise<ListenerStatus>;
+    readonly stop: () => Promise<ListenerStatus>;
+    readonly regenerateToken: () => Promise<ListenerStatus>;
+    readonly getAgentConfigs: () => Promise<AgentConfigs>;
   };
   readonly vscode: {
-    readonly getStatus: () => Promise<{ readonly enabled: boolean; readonly url: string | null; readonly bearerToken: string | null; readonly latestContext: VsCodeContext | null }>;
-    readonly start: () => Promise<{ readonly url: string; readonly bearerToken: string }>;
-    readonly stop: () => Promise<void>;
+    readonly getStatus: () => Promise<ListenerStatus & { readonly latestContext: VsCodeContext | null }>;
+    readonly start: () => Promise<ListenerStatus & { readonly latestContext: VsCodeContext | null }>;
+    readonly stop: () => Promise<ListenerStatus & { readonly latestContext: VsCodeContext | null }>;
   };
 }

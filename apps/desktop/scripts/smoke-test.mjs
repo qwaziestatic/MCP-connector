@@ -2,7 +2,7 @@
 // servers work. CI only builds the code, so without this a startup crash in the
 // packaged app goes unnoticed.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -14,6 +14,8 @@ const startupTimeoutMs = 90_000;
 
 // A throwaway profile keeps the database and settings out of the real user-data folder.
 const userDataDir = await mkdtemp(join(tmpdir(), "mcp-connector-smoke-"));
+// Port 0 picks free ports, so the test never collides with a running copy of the app.
+await writeFile(join(userDataDir, "settings.json"), JSON.stringify({ mcpPort: 0, vscodePort: 0 }));
 const env = { ...process.env };
 // VS Code and some shells set this, which would make Electron run as plain Node.js.
 delete env.ELECTRON_RUN_AS_NODE;
