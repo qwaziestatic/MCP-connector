@@ -83,6 +83,16 @@ Non-secret settings live in `settings.json` in the app's user-data folder:
 While the MCP server runs, the app writes its address (not its token) to
 `mcp-endpoint.json` in the same folder.
 
+### Stdio mode
+
+For agents that only support stdio, the installed app can be launched as
+`"MCP Connector.exe" --mcp-stdio`. It opens no window and no database: it reads
+the running app's address from `mcp-endpoint.json` and its token from the
+vault, then relays the agent's messages to the running app, so approvals still
+happen in its window. If the app or its MCP server isn't running, every request
+gets an error that says so. **Copy stdio setup for Claude Code** and **Copy stdio
+JSON** in the app produce the setup; they are only offered in the installed app.
+
 ## VS Code context listener
 
 The desktop app can start an authenticated loopback WebSocket listener for a

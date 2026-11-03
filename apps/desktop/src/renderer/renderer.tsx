@@ -237,11 +237,17 @@ export function App(): JSX.Element {
     }
   };
 
-  const copyAgentConfig = async (agent: "claudeCode" | "cursor"): Promise<void> => {
+  const copyAgentConfig = async (
+    agent: "claudeCode" | "cursor" | "claudeCodeStdio" | "stdioJson"
+  ): Promise<void> => {
     setError(null);
     try {
       const configs = await window.desktopApi.mcp.getAgentConfigs();
-      await copyValue(agent, configs[agent]);
+      const config = configs[agent];
+      if (config === null) {
+        throw new Error("Stdio setup is only available in the installed app.");
+      }
+      await copyValue(agent, config);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to build the agent setup.");
     }
@@ -543,6 +549,18 @@ export function App(): JSX.Element {
           </button>
           <button className="button ghost" onClick={() => void copyAgentConfig("cursor")} disabled={mcpStatus.url === null}>
             {copied === "cursor" ? "Copied" : "Copy setup for Cursor"}
+          </button>
+        </div>
+        <p className="muted">
+          For agents that only support stdio, copy a setup that launches MCP Connector in stdio mode.
+          It relays to this window, so keep the app open with the MCP server running.
+        </p>
+        <div className="actions endpoint-actions">
+          <button className="button ghost" onClick={() => void copyAgentConfig("claudeCodeStdio")} disabled={mcpStatus.url === null}>
+            {copied === "claudeCodeStdio" ? "Copied" : "Copy stdio setup for Claude Code"}
+          </button>
+          <button className="button ghost" onClick={() => void copyAgentConfig("stdioJson")} disabled={mcpStatus.url === null}>
+            {copied === "stdioJson" ? "Copied" : "Copy stdio JSON"}
           </button>
         </div>
         {mcpStatus.url !== null && (

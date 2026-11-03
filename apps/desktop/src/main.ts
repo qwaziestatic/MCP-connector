@@ -23,6 +23,7 @@ import { buildAgentConfigs } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
+import { isStdioMode, runStdioMode, STDIO_FLAG } from "./stdio/stdio-mode";
 import type { McpConnectorDependencies } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -287,7 +288,14 @@ function registerIpcHandlers(
     if (status.url === null) {
       throw new Error("Start the MCP server first: its port is chosen when it starts.");
     }
-    return buildAgentConfigs({ url: status.url, bearerToken: status.bearerToken });
+    // The stdio command must point at the installed app, so it is only
+    // offered in a packaged build, not in `npm run dev`.
+    return buildAgentConfigs({
+      url: status.url,
+      bearerToken: status.bearerToken,
+      ...(app.isPackaged ? { stdio: { command: process.execPath, args: [STDIO_FLAG] } } : {}),
+      platform: process.platform
+    });
   });
 
   ipcMain.handle("vscode:get-status", () => connectionManager.getVsCodeStatus());
@@ -324,7 +332,7 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
-app.whenReady().then(async () => {
+async function startDesktopApp(): Promise<void> {
   configureElectronSecurity();
   const databaseUrl = `file:${join(app.getPath("userData"), "mcp-connector.db")}`;
   process.env.DATABASE_URL = databaseUrl;
@@ -423,16 +431,32 @@ app.whenReady().then(async () => {
       createMainWindow();
     }
   });
-});
+}
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+if (isStdioMode()) {
+  // No window and no database: only relay an agent's stdio to the running app.
+  // Keep this path free of any single-instance lock, which would refuse to
+  // start while the app is open.
+  app.disableHardwareAcceleration();
+  app.dock?.hide();
+  void app.whenReady()
+    .then(() => runStdioMode(join(app.getPath("userData"), "mcp-endpoint.json")))
+    .catch((error: unknown) => {
+      process.stderr.write(`MCP Connector stdio mode failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      app.exit(1);
+    });
+} else {
+  void app.whenReady().then(startDesktopApp);
 
-app.on("before-quit", () => {
-  // Closing does not forget that the servers were running; they restart on the next launch.
-  void connections?.closeAll();
-  connections = null;
-});
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+
+  app.on("before-quit", () => {
+    // Closing does not forget that the servers were running; they restart on the next launch.
+    void connections?.closeAll();
+    connections = null;
+  });
+}
