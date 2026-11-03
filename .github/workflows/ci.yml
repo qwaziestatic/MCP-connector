@@ -48,3 +48,33 @@ jobs:
       # so audit every dependency for high and critical advisories too.
       - name: Audit all dependencies
         run: npm audit --audit-level=high
+
+  # Builds the Windows installer and launches the packaged app, which the
+  # validate job never does.
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Build core package
+        run: npm run build --workspace=@mcp-connector/core
+
+      - name: Build Windows installer
+        run: npm run package:win
+
+      - name: Launch the packaged app
+        run: npm run smoke-test --workspace=@mcp-connector/desktop

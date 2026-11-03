@@ -50,6 +50,9 @@ jobs:
       - name: Build Windows installer
         run: npm run package:win
 
+      - name: Launch the packaged app
+        run: npm run smoke-test --workspace=@mcp-connector/desktop
+
       - name: Build VS Code extension
         run: npm run package:vscode
 

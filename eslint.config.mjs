@@ -15,6 +15,13 @@ export default [
   },
   eslint.configs.recommended,
   {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      // WebSocket is a Node.js global since 22 but not yet in globals.node.
+      globals: { ...globals.node, WebSocket: "readonly" }
+    }
+  },
+  {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       parser: tseslintParser,
