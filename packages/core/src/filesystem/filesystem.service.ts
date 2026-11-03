@@ -1,5 +1,5 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import path, { dirname, relative, resolve } from "node:path";
 
 export interface WorkspaceEntry {
   readonly relativePath: string;
@@ -31,14 +31,27 @@ function assertWorkspacePath(workspacePath: string): string {
   return normalizedPath;
 }
 
-function isWithinWorkspace(workspacePath: string, candidatePath: string): boolean {
-  const relativePath = relative(workspacePath, candidatePath);
-  // On Windows, paths on different drives produce an absolute relative path.
+/**
+ * Reports whether `candidatePath` is `rootPath` or inside it. `pathApi` defaults
+ * to the current platform's rules; tests pass `path.win32` or `path.posix` so
+ * both rule sets are checked on every operating system.
+ */
+export function isPathWithinRoot(
+  rootPath: string,
+  candidatePath: string,
+  pathApi: typeof path.posix = path
+): boolean {
+  const relativePath = pathApi.relative(rootPath, candidatePath);
+  // On Windows, paths on different drives or UNC shares produce an absolute relative path.
   return relativePath === "" || (
-    !isAbsolute(relativePath)
-    && !relativePath.startsWith(`..${sep}`)
+    !pathApi.isAbsolute(relativePath)
+    && !relativePath.startsWith(`..${pathApi.sep}`)
     && relativePath !== ".."
   );
+}
+
+function isWithinWorkspace(workspacePath: string, candidatePath: string): boolean {
+  return isPathWithinRoot(workspacePath, candidatePath);
 }
 
 async function walkDirectory(

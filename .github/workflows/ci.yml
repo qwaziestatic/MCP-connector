@@ -49,6 +49,40 @@ jobs:
       - name: Audit all dependencies
         run: npm audit --audit-level=high
 
+  # The code and tests must also pass on Linux and macOS: a Windows-only CI
+  # once hid a test that failed everywhere else. Packaging stays Windows-only.
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
   # Builds the Windows installer and launches the packaged app, which the
   # validate job never does.
   package:
