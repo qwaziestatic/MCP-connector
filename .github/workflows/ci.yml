@@ -43,3 +43,8 @@ jobs:
 
       - name: Audit runtime dependencies
         run: npm audit --omit=dev
+
+      # Electron is a devDependency but its runtime ships in the installer,
+      # so audit every dependency for high and critical advisories too.
+      - name: Audit all dependencies
+        run: npm audit --audit-level=high
