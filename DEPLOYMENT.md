@@ -43,7 +43,8 @@ variables before starting the application:
 - `MCP_NOTION_CLIENT_ID`
 - `MCP_NOTION_CLIENT_SECRET`
 - `MCP_NOTION_DATABASE_ID`
-- `MCP_HTTP_ENABLED` (set to `true` to enable the authenticated loopback MCP server)
+- `MCP_HTTP_ENABLED` (set to `true` to always start the MCP server at launch;
+  without it, the server starts at launch if it was running when the app last closed)
 - `MCP_UPDATER_ENABLED` (set to `true` to enable update checks)
 - `MCP_UPDATE_FEED_URL` (required when updater is enabled; generic provider URL)
 - `MCP_UPDATE_CHANNEL` (optional release channel override)
@@ -62,6 +63,25 @@ https://github.com/qwaziestatic/MCP-connector/releases/download/v0.1.0/
 The feed must contain Electron Builder's generated `latest.yml` and the
 matching signed installer assets. Do not enable the updater until signed
 artifacts and a tested feed are available.
+
+## Connecting AI agents
+
+The MCP server listens on `http://127.0.0.1:47820/mcp` and requires a bearer
+token. The token is generated once, stored encrypted in the credential vault,
+and reused after restarts, so each agent is set up once. In the app, **Copy
+setup for Claude Code** and **Copy setup for Cursor** copy a ready-to-paste
+command or `mcp.json` entry. **New token** replaces the token; agents set up
+with the old one must be set up again.
+
+Non-secret settings live in `settings.json` in the app's user-data folder:
+
+- `mcpPort` (default `47820`) and `vscodePort` (default `47821`). Use `0` to
+  pick a free port on every start; the address then changes on each start.
+- `mcpServerEnabled` and `vscodeListenerEnabled`, which the app updates when
+  you start or stop each listener, so they restart on the next launch.
+
+While the MCP server runs, the app writes its address (not its token) to
+`mcp-endpoint.json` in the same folder.
 
 ## VS Code context listener
 

@@ -12,18 +12,18 @@ import {
   OctokitGitHubConnector,
   OAuthPkceService,
   PrismaAuditRepository,
-  startMcpHttpServer,
   WorkflowService
 } from "@mcp-connector/core";
 import { CredentialVault } from "./security/credential-vault";
 import { OAuthCallbackServer } from "./security/oauth-callback-server";
 import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
-import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
+import { AgentConnectionManager } from "./connection/connection-manager";
+import { buildAgentConfigs } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
-import type { McpConnectorDependencies, McpHttpServerHandle } from "@mcp-connector/core";
+import type { McpConnectorDependencies } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -31,9 +31,10 @@ const isDevelopment = process.env.NODE_ENV === "development";
 const filesystemService = new FilesystemService();
 const oauthPkceService = new OAuthPkceService();
 const oauthTokenService = new FetchOAuthTokenService();
-let mcpHttpServer: McpHttpServerHandle | null = null;
-let vsCodeContextServer: VsCodeContextServerHandle | null = null;
+let connections: AgentConnectionManager | null = null;
 let autoUpdateService: AutoUpdateService | null = null;
+// Problems found while starting, such as a busy port, shown once in the window.
+let startupProblems: readonly string[] = [];
 
 function isAllowedRendererUrl(value: string): boolean {
   try {
@@ -106,10 +107,11 @@ function registerIpcHandlers(
   credentialVault: CredentialVault,
   oauthCallbackServer: OAuthCallbackServer,
   getNotionConnector: () => OfficialNotionConnector,
-  getMcpDependencies: () => McpConnectorDependencies,
+  connectionManager: AgentConnectionManager,
   settings: AppSettingsStore
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
+  ipcMain.handle("app:get-startup-problems", () => startupProblems);
   ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
     enabled: false,
     phase: "disabled",
@@ -276,50 +278,21 @@ function registerIpcHandlers(
     await credentialVault.remove(provider);
   });
 
-  ipcMain.handle("mcp:get-status", () => ({
-    enabled: mcpHttpServer !== null,
-    url: mcpHttpServer?.url ?? null,
-    bearerToken: mcpHttpServer?.bearerToken ?? null
-  }));
-
-  ipcMain.handle("mcp:start", async () => {
-    if (mcpHttpServer !== null) {
-      return { url: mcpHttpServer.url, bearerToken: mcpHttpServer.bearerToken };
+  ipcMain.handle("mcp:get-status", () => connectionManager.getMcpStatus());
+  ipcMain.handle("mcp:start", () => connectionManager.startMcp());
+  ipcMain.handle("mcp:stop", () => connectionManager.stopMcp());
+  ipcMain.handle("mcp:regenerate-token", () => connectionManager.regenerateMcpToken());
+  ipcMain.handle("mcp:get-agent-configs", async () => {
+    const status = await connectionManager.getMcpStatus();
+    if (status.url === null) {
+      throw new Error("Start the MCP server first: its port is chosen when it starts.");
     }
-    mcpHttpServer = await startMcpHttpServer(getMcpDependencies());
-    return { url: mcpHttpServer.url, bearerToken: mcpHttpServer.bearerToken };
+    return buildAgentConfigs({ url: status.url, bearerToken: status.bearerToken });
   });
 
-  ipcMain.handle("mcp:stop", async () => {
-    if (mcpHttpServer === null) return;
-    const server = mcpHttpServer;
-    mcpHttpServer = null;
-    await server.close();
-  });
-
-  ipcMain.handle("vscode:get-status", () => ({
-    enabled: vsCodeContextServer !== null,
-    url: vsCodeContextServer?.url ?? null,
-    bearerToken: vsCodeContextServer?.bearerToken ?? null,
-    latestContext: vsCodeContextServer?.latestContext ?? null
-  }));
-
-  ipcMain.handle("vscode:start", async () => {
-    if (vsCodeContextServer !== null) {
-      return { url: vsCodeContextServer.url, bearerToken: vsCodeContextServer.bearerToken };
-    }
-    vsCodeContextServer = await startVsCodeContextServer((context) => {
-      console.log(`Accepted VS Code context for workspace: ${context.workspacePath}`);
-    });
-    return { url: vsCodeContextServer.url, bearerToken: vsCodeContextServer.bearerToken };
-  });
-
-  ipcMain.handle("vscode:stop", async () => {
-    if (vsCodeContextServer === null) return;
-    const server = vsCodeContextServer;
-    vsCodeContextServer = null;
-    await server.close();
-  });
+  ipcMain.handle("vscode:get-status", () => connectionManager.getVsCodeStatus());
+  ipcMain.handle("vscode:start", () => connectionManager.startVsCode());
+  ipcMain.handle("vscode:stop", () => connectionManager.stopVsCode());
 }
 
 function createMainWindow(): BrowserWindow {
@@ -400,19 +373,32 @@ app.whenReady().then(async () => {
       )),
       ...(getNotionDatabaseId() === undefined ? {} : { notion: getNotionConnector() })
     });
+    const connectionManager = new AgentConnectionManager({
+      settings,
+      secrets: credentialVault,
+      getMcpDependencies,
+      endpointFilePath: join(app.getPath("userData"), "mcp-endpoint.json"),
+      onVsCodeContext: (context) => {
+        console.log(`Accepted VS Code context for workspace: ${context.workspacePath}`);
+      },
+      log: (message) => console.log(message)
+    });
+    connections = connectionManager;
     registerIpcHandlers(
       workflowService,
       auditRepository,
       credentialVault,
       oauthCallbackServer,
       getNotionConnector,
-      getMcpDependencies,
+      connectionManager,
       settings
     );
-    if (process.env.MCP_HTTP_ENABLED === "true") {
-      mcpHttpServer = await startMcpHttpServer(getMcpDependencies());
-      console.log(`MCP HTTP server listening at ${mcpHttpServer.url}`);
-    }
+    // Start what was running when the app last closed. MCP_HTTP_ENABLED=true
+    // still forces the MCP server on, for scripted setups.
+    startupProblems = await connectionManager.restoreOnLaunch({
+      mcp: process.env.MCP_HTTP_ENABLED === "true"
+    });
+    for (const problem of startupProblems) console.error(problem);
     if (autoUpdateService.getStatus().enabled) {
       try {
         await autoUpdateService.checkForUpdates();
@@ -446,12 +432,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (mcpHttpServer !== null) {
-    void mcpHttpServer.close();
-    mcpHttpServer = null;
-  }
-  if (vsCodeContextServer !== null) {
-    void vsCodeContextServer.close();
-    vsCodeContextServer = null;
-  }
+  // Closing does not forget that the servers were running; they restart on the next launch.
+  void connections?.closeAll();
+  connections = null;
 });

@@ -4,9 +4,18 @@ import { dirname } from "node:path";
 import { z } from "zod";
 
 // Non-secret settings that should survive a restart. Secrets belong in the
-// CredentialVault, never here.
+// CredentialVault, never here. An invalid value drops only that setting.
+const port = z.number().int().min(0).max(65_535);
 const appSettingsSchema = z.object({
-  workspacePath: z.string().min(1).optional()
+  workspacePath: z.string().min(1).optional().catch(undefined),
+  /** Port for the MCP HTTP server. 0 picks a free port on each start. */
+  mcpPort: port.optional().catch(undefined),
+  /** Port for the VS Code context listener. 0 picks a free port on each start. */
+  vscodePort: port.optional().catch(undefined),
+  /** Whether the MCP server was running when the app last closed. */
+  mcpServerEnabled: z.boolean().optional().catch(undefined),
+  /** Whether the VS Code listener was running when the app last closed. */
+  vscodeListenerEnabled: z.boolean().optional().catch(undefined)
 });
 
 export type AppSettings = z.infer<typeof appSettingsSchema>;
@@ -15,6 +24,11 @@ export class AppSettingsStore {
   private writeQueue: Promise<void> = Promise.resolve();
 
   public constructor(private readonly filePath: string) {}
+
+  /** Where the settings are stored, for messages that tell the user what to edit. */
+  get path(): string {
+    return this.filePath;
+  }
 
   /** Returns the saved settings, or defaults if the file is missing or invalid. */
   async read(): Promise<AppSettings> {
@@ -27,7 +41,7 @@ export class AppSettingsStore {
     }
     try {
       const parsed = appSettingsSchema.safeParse(JSON.parse(text));
-      return parsed.success ? parsed.data : {};
+      return parsed.success ? this.withoutUndefined(parsed.data) : {};
     } catch {
       // A corrupt settings file must not stop the app from starting.
       return {};
@@ -47,6 +61,12 @@ export class AppSettingsStore {
     this.writeQueue = next.catch(() => undefined);
     await next;
     return updated;
+  }
+
+  private withoutUndefined(settings: AppSettings): AppSettings {
+    return Object.fromEntries(
+      Object.entries(settings).filter(([, value]) => value !== undefined)
+    ) as AppSettings;
   }
 
   /**

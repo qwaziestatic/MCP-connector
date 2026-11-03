@@ -29,9 +29,10 @@ function constantTimeTokenMatches(provided: string, expected: string): boolean {
 }
 
 export async function startVsCodeContextServer(
-  onContext: (context: VsCodeContext) => void
+  onContext: (context: VsCodeContext) => void,
+  options: { readonly port?: number; readonly bearerToken?: string } = {}
 ): Promise<VsCodeContextServerHandle> {
-  const bearerToken = randomBytes(32).toString("base64url");
+  const bearerToken = options.bearerToken ?? randomBytes(32).toString("base64url");
   const httpServer = createServer((_request, response) => {
     response.writeHead(404);
     response.end();
@@ -89,7 +90,7 @@ export async function startVsCodeContextServer(
     };
     httpServer.once("error", onError);
     httpServer.once("listening", onListening);
-    httpServer.listen(0, "127.0.0.1");
+    httpServer.listen(options.port ?? 0, "127.0.0.1");
   });
 
   const address = httpServer.address();

@@ -59,6 +59,7 @@ export function App(): JSX.Element {
     readonly url: string | null;
     readonly bearerToken: string | null;
   }>({ enabled: false, url: null, bearerToken: null });
+  const [confirmingNewToken, setConfirmingNewToken] = useState(false);
   const [vscodeStatus, setVscodeStatus] = useState<{
     readonly enabled: boolean;
     readonly url: string | null;
@@ -110,7 +111,10 @@ export function App(): JSX.Element {
       window.desktopApi.credentials.getStatus().then(setConnectionStatus),
       window.desktopApi.mcp.getStatus().then(setMcpStatus),
       window.desktopApi.vscode.getStatus().then(setVscodeStatus),
-      window.desktopApi.updater.getStatus().then(setUpdaterStatus)
+      window.desktopApi.updater.getStatus().then(setUpdaterStatus),
+      window.desktopApi.app.getStartupProblems().then((problems) => {
+        if (problems.length > 0) setError(problems.join(" "));
+      })
     ]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Unable to load audit history.");
     });
@@ -225,18 +229,37 @@ export function App(): JSX.Element {
     setError(null);
     setBusy(true);
     try {
-      if (enabled) {
-        setMcpStatus(await window.desktopApi.mcp.stop().then(() => ({
-          enabled: false,
-          url: null,
-          bearerToken: null
-        })));
-      } else {
-        const started = await window.desktopApi.mcp.start();
-        setMcpStatus({ enabled: true, ...started });
-      }
+      setMcpStatus(enabled ? await window.desktopApi.mcp.stop() : await window.desktopApi.mcp.start());
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to update MCP server.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyAgentConfig = async (agent: "claudeCode" | "cursor"): Promise<void> => {
+    setError(null);
+    try {
+      const configs = await window.desktopApi.mcp.getAgentConfigs();
+      await copyValue(agent, configs[agent]);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to build the agent setup.");
+    }
+  };
+
+  // Two clicks, so a stray click cannot disconnect every agent that is set up.
+  const regenerateMcpToken = async (): Promise<void> => {
+    if (!confirmingNewToken) {
+      setConfirmingNewToken(true);
+      return;
+    }
+    setConfirmingNewToken(false);
+    setError(null);
+    setBusy(true);
+    try {
+      setMcpStatus(await window.desktopApi.mcp.regenerateToken());
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Unable to create a new token.");
     } finally {
       setBusy(false);
     }
@@ -246,14 +269,7 @@ export function App(): JSX.Element {
     setError(null);
     setBusy(true);
     try {
-      if (enabled) {
-        await window.desktopApi.vscode.stop();
-        setVscodeStatus({ enabled: false, url: null, bearerToken: null, latestContext: null });
-      } else {
-        const started = await window.desktopApi.vscode.start();
-        const status = await window.desktopApi.vscode.getStatus();
-        setVscodeStatus({ ...status, enabled: true, ...started });
-      }
+      setVscodeStatus(enabled ? await window.desktopApi.vscode.stop() : await window.desktopApi.vscode.start());
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to update VS Code listener.");
     } finally {
@@ -513,16 +529,37 @@ export function App(): JSX.Element {
             {mcpStatus.enabled ? "Running" : "Stopped"}
           </span>
         </div>
-        <p className="muted">Loopback-only HTTP transport protected by a per-launch bearer token.</p>
+        <p className="muted">
+          Loopback-only HTTP server protected by a bearer token. The address and token stay the same
+          after restarts, so you set up each agent once. If the server is running when you close the
+          app, it starts again next time.
+        </p>
         <div className="actions endpoint-actions">
           <button className={`button ${mcpStatus.enabled ? "danger" : "secondary"}`} onClick={() => void updateMcp(mcpStatus.enabled)} disabled={busy}>
             {mcpStatus.enabled ? "Stop MCP server" : "Start MCP server"}
           </button>
+          <button className="button ghost" onClick={() => void copyAgentConfig("claudeCode")} disabled={mcpStatus.url === null}>
+            {copied === "claudeCode" ? "Copied" : "Copy setup for Claude Code"}
+          </button>
+          <button className="button ghost" onClick={() => void copyAgentConfig("cursor")} disabled={mcpStatus.url === null}>
+            {copied === "cursor" ? "Copied" : "Copy setup for Cursor"}
+          </button>
         </div>
-        {mcpStatus.enabled && (
+        {mcpStatus.url !== null && (
           <div className="endpoint-details">
             <div className="endpoint-value"><span>Endpoint</span><code>{mcpStatus.url}</code><button className="button ghost" onClick={() => void copyValue("endpoint", mcpStatus.url)}>{copied === "endpoint" ? "Copied" : "Copy"}</button></div>
             <div className="endpoint-value"><span>Bearer token</span><code>{mcpStatus.bearerToken}</code><button className="button ghost" onClick={() => void copyValue("token", mcpStatus.bearerToken)}>{copied === "token" ? "Copied" : "Copy"}</button></div>
+            <div className="endpoint-value">
+              <span>Token</span>
+              <span className="muted">
+                {confirmingNewToken
+                  ? "Agents set up with the current token will stop working. Click again to confirm."
+                  : "Create a new token if this one was shared by mistake."}
+              </span>
+              <button className={`button ${confirmingNewToken ? "danger" : "ghost"}`} onClick={() => void regenerateMcpToken()} disabled={busy}>
+                {confirmingNewToken ? "Confirm new token" : "New token"}
+              </button>
+            </div>
           </div>
         )}
       </section>
@@ -543,7 +580,7 @@ export function App(): JSX.Element {
             {vscodeStatus.enabled ? "Stop listener" : "Start listener"}
           </button>
         </div>
-        {vscodeStatus.enabled && (
+        {vscodeStatus.url !== null && (
           <div className="endpoint-details">
             <div className="endpoint-value"><span>Endpoint</span><code>{vscodeStatus.url}</code><button className="button ghost" onClick={() => void copyValue("vscode-endpoint", vscodeStatus.url)}>{copied === "vscode-endpoint" ? "Copied" : "Copy"}</button></div>
             <div className="endpoint-value"><span>Bearer token</span><code>{vscodeStatus.bearerToken}</code><button className="button ghost" onClick={() => void copyValue("vscode-token", vscodeStatus.bearerToken)}>{copied === "vscode-token" ? "Copied" : "Copy"}</button></div>

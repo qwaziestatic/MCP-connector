@@ -4,7 +4,8 @@ import type { DesktopApi } from "./shared/desktop-api";
 
 const desktopApi: DesktopApi = {
   app: {
-    getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>
+    getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
+    getStartupProblems: () => ipcRenderer.invoke("app:get-startup-problems") as Promise<readonly string[]>
   },
   updater: {
     getStatus: () => ipcRenderer.invoke("updater:get-status"),
@@ -44,7 +45,9 @@ const desktopApi: DesktopApi = {
   mcp: {
     getStatus: () => ipcRenderer.invoke("mcp:get-status"),
     start: () => ipcRenderer.invoke("mcp:start"),
-    stop: () => ipcRenderer.invoke("mcp:stop")
+    stop: () => ipcRenderer.invoke("mcp:stop"),
+    regenerateToken: () => ipcRenderer.invoke("mcp:regenerate-token"),
+    getAgentConfigs: () => ipcRenderer.invoke("mcp:get-agent-configs")
   },
   vscode: {
     getStatus: () => ipcRenderer.invoke("vscode:get-status"),
