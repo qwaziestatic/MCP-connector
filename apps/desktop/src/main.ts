@@ -19,7 +19,7 @@ import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
 import { AutoUpdateService } from "./updater/auto-update.service";
-import type { McpHttpServerHandle } from "@mcp-connector/core";
+import type { McpConnectorDependencies, McpHttpServerHandle } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -101,13 +101,18 @@ function getOAuthConfig(provider: "github" | "notion") {
   return clientSecret === undefined ? config : { ...config, clientSecret };
 }
 
+function getNotionDatabaseId(): string | undefined {
+  const databaseId = process.env.MCP_NOTION_DATABASE_ID?.trim();
+  return databaseId === undefined || databaseId.length === 0 ? undefined : databaseId;
+}
+
 function registerIpcHandlers(
   workflowService: WorkflowService,
   auditRepository: PrismaAuditRepository,
   credentialVault: CredentialVault,
   oauthCallbackServer: OAuthCallbackServer,
   getNotionConnector: () => OfficialNotionConnector,
-  getGithubConnector: () => OctokitGitHubConnector
+  getMcpDependencies: () => McpConnectorDependencies
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
@@ -282,12 +287,7 @@ function registerIpcHandlers(
     if (mcpHttpServer !== null) {
       return { url: mcpHttpServer.url, bearerToken: mcpHttpServer.bearerToken };
     }
-    mcpHttpServer = await startMcpHttpServer({
-      filesystem: filesystemService,
-      workflow: workflowService,
-      notion: getNotionConnector(),
-      github: getGithubConnector()
-    });
+    mcpHttpServer = await startMcpHttpServer(getMcpDependencies());
     return { url: mcpHttpServer.url, bearerToken: mcpHttpServer.bearerToken };
   });
 
@@ -366,61 +366,44 @@ app.whenReady().then(async () => {
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
     const oauthCallbackServer = new OAuthCallbackServer();
+    const getNotionConnector = (): OfficialNotionConnector => {
+      const notionDatabaseId = getNotionDatabaseId();
+      if (notionDatabaseId === undefined) {
+        throw new Error("MCP_NOTION_DATABASE_ID is not configured.");
+      }
+      return new OfficialNotionConnector(
+        new VaultTokenProvider(
+          credentialVault,
+          "notion",
+          () => getOAuthConfig("notion"),
+          (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
+        ),
+        { databaseId: notionDatabaseId }
+      );
+    };
+    // Notion is optional: without a database ID the MCP server still starts and
+    // its Notion tools report that the connector is not configured.
+    const getMcpDependencies = (): McpConnectorDependencies => ({
+      filesystem: filesystemService,
+      workflow: workflowService,
+      github: new OctokitGitHubConnector(new VaultTokenProvider(
+        credentialVault,
+        "github",
+        () => getOAuthConfig("github"),
+        (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
+      )),
+      ...(getNotionDatabaseId() === undefined ? {} : { notion: getNotionConnector() })
+    });
     registerIpcHandlers(
       workflowService,
       auditRepository,
       credentialVault,
       oauthCallbackServer,
-      () => {
-        const notionDatabaseId = process.env.MCP_NOTION_DATABASE_ID;
-        if (notionDatabaseId === undefined || notionDatabaseId.trim().length === 0) {
-          throw new Error("MCP_NOTION_DATABASE_ID is not configured.");
-        }
-        return new OfficialNotionConnector(
-          new VaultTokenProvider(
-            credentialVault,
-            "notion",
-            () => getOAuthConfig("notion"),
-            (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
-          ),
-          { databaseId: notionDatabaseId }
-        );
-      },
-      () => new OctokitGitHubConnector(new VaultTokenProvider(
-        credentialVault,
-        "github",
-        () => getOAuthConfig("github"),
-        (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
-      ))
+      getNotionConnector,
+      getMcpDependencies
     );
     if (process.env.MCP_HTTP_ENABLED === "true") {
-      const dependencies = {
-        filesystem: filesystemService,
-        workflow: workflowService,
-        github: new OctokitGitHubConnector(new VaultTokenProvider(
-          credentialVault,
-          "github",
-          () => getOAuthConfig("github"),
-          (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
-        ))
-      };
-      const databaseId = process.env.MCP_NOTION_DATABASE_ID;
-      if (databaseId !== undefined && databaseId.trim().length > 0) {
-        mcpHttpServer = await startMcpHttpServer({
-          ...dependencies,
-          notion: new OfficialNotionConnector(
-            new VaultTokenProvider(
-              credentialVault,
-              "notion",
-              () => getOAuthConfig("notion"),
-              (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
-            ),
-            { databaseId }
-          )
-        });
-      } else {
-        mcpHttpServer = await startMcpHttpServer(dependencies);
-      }
+      mcpHttpServer = await startMcpHttpServer(getMcpDependencies());
       console.log(`MCP HTTP server listening at ${mcpHttpServer.url}`);
     }
     if (autoUpdateService.getStatus().enabled) {
