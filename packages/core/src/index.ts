@@ -4,6 +4,7 @@ export * from "./connectors/index.js";
 export * from "./filesystem/filesystem.service.js";
 export * from "./mcp/mcp-server.js";
 export * from "./mcp/http.js";
+export * from "./mcp/stdio-bridge.js";
 export * from "./workflow/audit.repository.js";
 export * from "./workflow/prisma-audit.repository.js";
 export * from "./workflow/workflow.service.js";

@@ -9,8 +9,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint .",
-    "mcp:stdio": "node dist/mcp/stdio.js",
-    "mcp:http": "node dist/mcp/http-entrypoint.js",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "prisma:push": "prisma db push --schema prisma/schema.prisma"

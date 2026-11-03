@@ -11,6 +11,9 @@ export interface ListenerStatus {
 export interface AgentConfigs {
   readonly claudeCode: string;
   readonly cursor: string;
+  /** Null outside the installed app. */
+  readonly claudeCodeStdio: string | null;
+  readonly stdioJson: string | null;
 }
 
 export interface DesktopApi {
