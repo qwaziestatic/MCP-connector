@@ -12,6 +12,7 @@
     "package:win:signed": "npm run build && electron-builder --win --config electron-builder.signed.yml",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify-build": "node scripts/verify-build.mjs",
+    "smoke-test": "node scripts/smoke-test.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "database:migrate": "npm run prisma:migrate --workspace=@mcp-connector/core"

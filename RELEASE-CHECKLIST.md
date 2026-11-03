@@ -13,8 +13,9 @@ a real Windows machine, provider accounts, or release credentials.
 - [ ] `npm run build` passes.
 - [ ] `npm audit --omit=dev` reports zero runtime vulnerabilities.
 - [ ] `npm audit --audit-level=high` reports no high or critical advisories.
-- [ ] The packaged app in `apps/desktop/release/win-unpacked` starts and loads its database.
 - [ ] `npm run package:win` produces the expected x64 NSIS installer.
+- [ ] `npm run smoke-test --workspace=@mcp-connector/desktop` passes: the
+      packaged app starts, loads its database, and starts its local servers.
 - [ ] `npm run package:vscode` produces the expected VSIX.
 - [ ] No secrets, certificates, databases, or generated artifacts are tracked.
 
