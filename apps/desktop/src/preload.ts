@@ -16,7 +16,9 @@ const desktopApi: DesktopApi = {
     chooseWorkspace: () =>
       ipcRenderer.invoke("filesystem:choose-workspace") as Promise<string | null>,
     inspectWorkspace: (workspacePath) =>
-      ipcRenderer.invoke("filesystem:inspect-workspace", workspacePath)
+      ipcRenderer.invoke("filesystem:inspect-workspace", workspacePath),
+    getSelectedWorkspace: () =>
+      ipcRenderer.invoke("filesystem:get-selected-workspace") as Promise<string | null>
   },
   workflow: {
     createPreview: (action, target, summary, payload) =>

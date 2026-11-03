@@ -20,6 +20,7 @@ import { applyDatabaseMigrations } from "./database/migrations";
 import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
+import { AppSettingsStore } from "./settings/app-settings";
 import type { McpConnectorDependencies, McpHttpServerHandle } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -103,7 +104,8 @@ function registerIpcHandlers(
   credentialVault: CredentialVault,
   oauthCallbackServer: OAuthCallbackServer,
   getNotionConnector: () => OfficialNotionConnector,
-  getMcpDependencies: () => McpConnectorDependencies
+  getMcpDependencies: () => McpConnectorDependencies,
+  settings: AppSettingsStore
 ): void {
   ipcMain.handle("app:get-version", () => app.getVersion());
   ipcMain.handle("updater:get-status", () => autoUpdateService?.getStatus() ?? {
@@ -148,9 +150,13 @@ function registerIpcHandlers(
     const workspacePath = result.filePaths[0] ?? null;
     if (workspacePath !== null) {
       filesystemService.setAllowedWorkspaceRoot(workspacePath);
+      await settings.update({ workspacePath });
     }
     return workspacePath;
   });
+
+  ipcMain.handle("filesystem:get-selected-workspace", () =>
+    filesystemService.getAllowedWorkspaceRoot() ?? null);
 
   ipcMain.handle("filesystem:inspect-workspace", async (_event, workspacePath: unknown) => {
     if (typeof workspacePath !== "string") {
@@ -357,6 +363,13 @@ app.whenReady().then(async () => {
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
     const oauthCallbackServer = new OAuthCallbackServer();
+    const settings = new AppSettingsStore(join(app.getPath("userData"), "settings.json"));
+    // Restore the workspace chosen in an earlier session, so MCP tools work
+    // after a restart without the user choosing it again.
+    const savedWorkspace = await settings.readExistingWorkspace();
+    if (savedWorkspace !== undefined) {
+      filesystemService.setAllowedWorkspaceRoot(savedWorkspace);
+    }
     const getNotionConnector = (): OfficialNotionConnector => {
       const notionDatabaseId = getNotionDatabaseId();
       if (notionDatabaseId === undefined) {
@@ -391,7 +404,8 @@ app.whenReady().then(async () => {
       credentialVault,
       oauthCallbackServer,
       getNotionConnector,
-      getMcpDependencies
+      getMcpDependencies,
+      settings
     );
     if (process.env.MCP_HTTP_ENABLED === "true") {
       mcpHttpServer = await startMcpHttpServer(getMcpDependencies());

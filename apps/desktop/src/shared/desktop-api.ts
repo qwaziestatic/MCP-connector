@@ -41,6 +41,7 @@ export interface DesktopApi {
   readonly filesystem: {
     readonly chooseWorkspace: () => Promise<string | null>;
     readonly inspectWorkspace: (workspacePath: string) => Promise<WorkspaceSnapshot>;
+    readonly getSelectedWorkspace: () => Promise<string | null>;
   };
   readonly workflow: {
     readonly createPreview: (

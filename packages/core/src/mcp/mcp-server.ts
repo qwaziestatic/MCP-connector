@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   GitHubConnector,
@@ -40,12 +41,37 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
   );
 
   server.registerTool(
+    "workspace_get_selected",
+    {
+      title: "Get the selected workspace",
+      description: "Get the local folder the user selected in MCP Connector. "
+        + "Filesystem tools only work inside this folder.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false
+      }
+    },
+    async () => {
+      const workspacePath = dependencies.filesystem.getAllowedWorkspaceRoot() ?? null;
+      return result(workspacePath === null
+        ? {
+            workspacePath,
+            message: "No workspace is selected. Ask the user to choose one in the MCP Connector app."
+          }
+        : { workspacePath });
+    }
+  );
+
+  server.registerTool(
     "filesystem_inspect_workspace",
     {
       title: "Inspect local workspace",
-      description: "Read a selected local workspace structure and README metadata.",
+      description: "List the files in the user's selected workspace and read its README. "
+        + "Omit workspacePath to inspect the whole workspace; a relative path is a subfolder of it.",
       inputSchema: {
-        workspacePath: z.string().min(1)
+        workspacePath: z.string().min(1).optional()
       },
       annotations: {
         readOnlyHint: true,
@@ -54,10 +80,14 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
       }
     },
     async ({ workspacePath }) => {
-      if (dependencies.filesystem.getAllowedWorkspaceRoot() === undefined) {
+      const root = dependencies.filesystem.getAllowedWorkspaceRoot();
+      if (root === undefined) {
         throw new Error("Select a workspace in MCP Connector before inspecting files.");
       }
-      return result(await dependencies.filesystem.inspectWorkspace(workspacePath));
+      // Relative paths resolve inside the workspace; inspectWorkspace still
+      // rejects anything outside it, including absolute paths elsewhere.
+      const target = workspacePath === undefined ? root : resolve(root, workspacePath);
+      return result(await dependencies.filesystem.inspectWorkspace(target));
     }
   );
 

@@ -108,6 +108,18 @@ function App(): JSX.Element {
 
   useEffect(() => window.desktopApi.workflow.subscribe(setPendingPreviews), []);
 
+  // Show the workspace remembered from an earlier session.
+  useEffect(() => {
+    void (async () => {
+      const selectedPath = await window.desktopApi.filesystem.getSelectedWorkspace();
+      if (selectedPath === null) return;
+      setWorkspacePath(selectedPath);
+      setSnapshot(await window.desktopApi.filesystem.inspectWorkspace(selectedPath));
+    })().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Unable to inspect the saved workspace.");
+    });
+  }, []);
+
   useEffect(() => {
     if (updaterStatus.phase !== "checking" && updaterStatus.phase !== "downloading") {
       return;
