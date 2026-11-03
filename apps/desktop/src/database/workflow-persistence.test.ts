@@ -101,4 +101,24 @@ describe("workflow persistence on a real SQLite database", () => {
     await expect(second.workflow.executeApproved(rejected.id, async () => "no")).rejects.toThrow();
     await expect(second.workflow.executeApproved(approved.id, async () => "done")).resolves.toBe("done");
   });
+
+  it("lists only open previews, with all their fields, in one query", async () => {
+    const { workflow, repository } = await openDatabase();
+    const executed = await workflow.createPreview("CREATE", "Notion project page", "Done", { n: 1 });
+    await workflow.approve(executed.id);
+    await workflow.executeApproved(executed.id, async () => "page");
+    const rejected = await workflow.createPreview("CREATE", "Notion project page", "No", { n: 2 });
+    await workflow.reject(rejected.id);
+    const approved = await workflow.createPreview("CREATE", "Notion project page", "Ready", { n: 3 }, "mcp");
+    await workflow.approve(approved.id);
+    const waiting = await workflow.createPreview("CREATE", "Notion project page", "Waiting", { n: 4 });
+
+    const open = await repository.listOpenPreviews();
+
+    expect(open.map((record) => record.preview.id).sort()).toEqual([approved.id, waiting.id].sort());
+    expect(open.find((record) => record.preview.id === approved.id)).toMatchObject({
+      preview: { summary: "Ready", payload: { n: 3 }, source: "mcp" },
+      approvedAt: expect.any(String)
+    });
+  });
 });

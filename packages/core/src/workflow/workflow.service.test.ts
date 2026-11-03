@@ -186,7 +186,7 @@ describe("WorkflowService", () => {
     const repository = new InMemoryAuditRepository();
     const service = new WorkflowService(repository, repository);
     const preview = await service.createPreview("CREATE", "Notion", "Create page", {});
-    repository.listPreviews = async () => {
+    repository.listOpenPreviews = async () => {
       throw new Error("database unavailable");
     };
     service.subscribe(() => undefined);
