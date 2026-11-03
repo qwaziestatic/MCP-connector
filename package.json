@@ -22,10 +22,13 @@
     "package:vscode": "npm run package --workspace=apps/vscode-extension"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "better-sqlite3": "^13.0.3"
   }
 }

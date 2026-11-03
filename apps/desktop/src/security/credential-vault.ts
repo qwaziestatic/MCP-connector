@@ -19,19 +19,20 @@ export class CredentialVault {
   private writeQueue: Promise<void> = Promise.resolve();
 
   async save(credential: StoredCredential): Promise<void> {
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
 
+    const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(credential));
     await this.enqueueWrite(async () => {
       const contents: CredentialFile = await this.readFile();
-      contents[credential.provider] = safeStorage.encryptString(JSON.stringify(credential)).toString("base64");
+      contents[credential.provider] = encrypted.toString("base64");
       await this.writeFile(contents);
     });
   }
 
   async get(provider: StoredCredential["provider"]): Promise<StoredCredential | null> {
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
 
@@ -39,11 +40,14 @@ export class CredentialVault {
     const encrypted = contents[provider];
     if (encrypted === undefined) return null;
 
-    const parsed: unknown = JSON.parse(
-      safeStorage.decryptString(Buffer.from(encrypted, "base64"))
-    );
+    const decrypted = await safeStorage.decryptStringAsync(Buffer.from(encrypted, "base64"));
+    const parsed: unknown = JSON.parse(decrypted.result);
     if (!this.isCredential(parsed, provider)) {
       throw new Error(`Stored ${provider} credential has an invalid shape.`);
+    }
+    if (decrypted.shouldReEncrypt) {
+      // The OS key was rotated; store the credential under the current key.
+      await this.save(parsed);
     }
     return parsed;
   }
