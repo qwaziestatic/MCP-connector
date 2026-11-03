@@ -31,6 +31,8 @@ const desktopApi: DesktopApi = {
       ipcRenderer.on("workflow:changed", callback);
       return () => ipcRenderer.removeListener("workflow:changed", callback);
     },
+    createNotionPagePreview: (title, markdown) =>
+      ipcRenderer.invoke("notion:create-page-preview", title, markdown),
     executeApproved: (previewId) => ipcRenderer.invoke("workflow:execute-approved", previewId),
     listAuditRecords: () => ipcRenderer.invoke("workflow:list-audit-records")
   },

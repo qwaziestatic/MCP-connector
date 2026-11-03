@@ -4,6 +4,12 @@ import type {
   GitHubConnector,
   NotionConnector
 } from "../connectors/connector.types.js";
+import {
+  createNotionPagePreview,
+  executeNotionPagePreview,
+  NOTION_MAX_MARKDOWN_LENGTH,
+  NOTION_MAX_TITLE_LENGTH
+} from "../connectors/notion-page.js";
 import { FilesystemService } from "../filesystem/filesystem.service.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
 import { z } from "zod";
@@ -119,14 +125,14 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
     "notion_create_project_page_preview",
     {
       title: "Preview Notion project page creation",
-      description: "Create a preview of a Notion project page. This tool never writes to Notion. "
+      description: "Create a preview of a Notion page from a title and Markdown. This tool never writes to Notion. "
         + "Ask the user to review and approve the preview in the MCP Connector app, then call "
         + "workflow_preview_status until it is APPROVED (then call notion_create_project_page) "
-        + "or REJECTED (then stop).",
+        + "or REJECTED (then stop). Headings, lists, to-dos, quotes, code blocks and dividers are kept; "
+        + "inline formatting such as **bold** or links appears as plain text.",
       inputSchema: {
-        workspacePath: z.string().min(1),
-        title: z.string().min(1).max(200),
-        markdown: z.string().max(256_000)
+        title: z.string().min(1).max(NOTION_MAX_TITLE_LENGTH),
+        markdown: z.string().max(NOTION_MAX_MARKDOWN_LENGTH)
       },
       annotations: {
         readOnlyHint: false,
@@ -134,14 +140,8 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
         openWorldHint: true
       }
     },
-    async ({ workspacePath, title, markdown }) => {
-      const preview = await dependencies.workflow.createPreview(
-        "CREATE",
-        "Notion project page",
-        `Create Notion project page for ${workspacePath}`,
-        { workspacePath, title, markdown },
-        "mcp"
-      );
+    async ({ title, markdown }) => {
+      const preview = await createNotionPagePreview(dependencies.workflow, { title, markdown }, "mcp");
       return result({
         requiresApproval: true,
         preview
@@ -180,24 +180,14 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
       }
     },
     async ({ previewId }) => {
-      if (dependencies.notion === undefined) {
+      const notion = dependencies.notion;
+      if (notion === undefined) {
         throw new Error("Notion connector is not configured.");
       }
-      const page = await dependencies.workflow.executeApproved(previewId, async (preview) => {
-        if (preview.action !== "CREATE" || preview.target !== "Notion project page") {
-          throw new Error("Preview is not a Notion project page creation.");
-        }
-        const workspacePath = typeof preview.payload.workspacePath === "string"
-          ? preview.payload.workspacePath
-          : "workspace";
-        const title = typeof preview.payload.title === "string"
-          ? preview.payload.title
-          : "Project";
-        const markdown = typeof preview.payload.markdown === "string"
-          ? preview.payload.markdown
-          : "";
-        return dependencies.notion!.createPage({ title, markdown: `${workspacePath}\n\n${markdown}` });
-      });
+      const page = await dependencies.workflow.executeApproved(
+        previewId,
+        (preview) => executeNotionPagePreview(preview, notion)
+      );
       return result(page);
     }
   );

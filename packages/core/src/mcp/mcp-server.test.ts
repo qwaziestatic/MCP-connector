@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FilesystemService } from "../filesystem/filesystem.service.js";
-import type { NotionConnector } from "../connectors/connector.types.js";
+import type { NotionConnector, NotionPageDraft } from "../connectors/connector.types.js";
 import { InMemoryAuditRepository } from "../workflow/audit.repository.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
 import { createMcpServer } from "./mcp-server.js";
@@ -25,7 +25,7 @@ describe("MCP protocol integration", () => {
     temporaryDirectories.push(workspace);
     await writeFile(join(workspace, "README.md"), "# MCP Connector");
 
-    let createdPage: { title: string; markdown: string } | null = null;
+    let createdPage: NotionPageDraft | null = null;
     const notion: NotionConnector = {
       createPage: async (draft) => {
         createdPage = draft;
@@ -69,9 +69,8 @@ describe("MCP protocol integration", () => {
       const previewResult = await client.callTool({
         name: "notion_create_project_page_preview",
         arguments: {
-          workspacePath: workspace,
           title: "MCP Connector",
-          markdown: "# MCP Connector"
+          markdown: "# MCP Connector\n\nShips previews."
         }
       });
       const content = previewResult.content;
@@ -90,7 +89,7 @@ describe("MCP protocol integration", () => {
         throw new Error("Expected preview tool to return text content.");
       }
       const previewPayload = JSON.parse(previewText.text) as {
-        readonly preview: { readonly id: string };
+        readonly preview: { readonly id: string; readonly payload: { readonly notionBlocks: unknown } };
       };
       const pendingResult = await client.callTool({
         name: "workflow_preview_status",
@@ -112,10 +111,12 @@ describe("MCP protocol integration", () => {
         arguments: { previewId: previewPayload.preview.id }
       });
       expect(JSON.stringify(execution)).toContain("page-1");
+      // Exactly the blocks stored in the approved preview, with no local path added.
       expect(createdPage).toEqual({
         title: "MCP Connector",
-        markdown: `${workspace}\n\n# MCP Connector`
+        blocks: previewPayload.preview.payload.notionBlocks
       });
+      expect(JSON.stringify(createdPage)).not.toContain(workspace);
     } finally {
       await client.close();
       await server.close();

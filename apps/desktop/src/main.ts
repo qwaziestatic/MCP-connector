@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
 import {
+  createNotionPagePreview,
+  executeNotionPagePreview,
   FilesystemService,
   FetchOAuthTokenService,
   OfficialNotionConnector,
@@ -212,21 +214,21 @@ function registerIpcHandlers(
       throw new Error("Preview ID must be a string.");
     }
 
-    return workflowService.executeApproved(previewId, async (preview) => {
-      if (preview.action !== "CREATE" || preview.target !== "Notion project page") {
-        throw new Error("No executor is registered for this workflow target.");
-      }
+    // Resolve the connector before claiming the approval: execution failures
+    // are final, so a missing Notion setting must not use up the approval.
+    const notion = getNotionConnector();
+    // The same executor as the MCP tool: it sends the stored blocks unchanged.
+    return workflowService.executeApproved(
+      previewId,
+      (preview) => executeNotionPagePreview(preview, notion)
+    );
+  });
 
-      const readme = typeof preview.payload.readme === "string"
-        ? preview.payload.readme
-        : "No README was found for this workspace.";
-      return getNotionConnector().createPage({
-        title: typeof preview.payload.workspacePath === "string"
-          ? preview.payload.workspacePath.split(/[\\/]/u).pop() ?? "Project"
-          : "Project",
-        markdown: readme
-      });
-    });
+  ipcMain.handle("notion:create-page-preview", async (_event, title: unknown, markdown: unknown) => {
+    if (typeof title !== "string" || typeof markdown !== "string") {
+      throw new Error("Invalid Notion page preview request.");
+    }
+    return createNotionPagePreview(workflowService, { title, markdown }, "ui");
   });
 
   ipcMain.handle("credentials:get-status", async () => ({
