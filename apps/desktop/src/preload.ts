@@ -5,7 +5,8 @@ import type { DesktopApi } from "./shared/desktop-api";
 const desktopApi: DesktopApi = {
   app: {
     getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
-    getStartupProblems: () => ipcRenderer.invoke("app:get-startup-problems") as Promise<readonly string[]>
+    getStartupProblems: () => ipcRenderer.invoke("app:get-startup-problems") as Promise<readonly string[]>,
+    openLogsFolder: () => ipcRenderer.invoke("app:open-logs-folder") as Promise<void>
   },
   updater: {
     getStatus: () => ipcRenderer.invoke("updater:get-status"),

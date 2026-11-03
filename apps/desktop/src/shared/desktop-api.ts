@@ -20,6 +20,7 @@ export interface DesktopApi {
   readonly app: {
     readonly getVersion: () => Promise<string>;
     readonly getStartupProblems: () => Promise<readonly string[]>;
+    readonly openLogsFolder: () => Promise<void>;
   };
   readonly updater: {
     readonly getStatus: () => Promise<{
