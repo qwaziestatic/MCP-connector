@@ -45,6 +45,7 @@ jobs:
           npm run typecheck
           npm test
           npm audit --omit=dev
+          npm audit --audit-level=high
 
       - name: Build Windows installer
         run: npm run package:win

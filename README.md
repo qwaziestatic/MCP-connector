@@ -28,7 +28,7 @@ branding, clean-machine validation, and real provider OAuth testing. See
 ## Requirements
 
 - Windows for the desktop application
-- Node.js 22 or newer
+- Node.js 22.12 or newer
 - npm 11
 
 ## Install and validate

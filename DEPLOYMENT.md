@@ -113,7 +113,15 @@ unsigned and uses the default Electron icon. Prisma has been migrated to v7
 with `prisma.config.ts`, schema datasource URL removal, and the SQLite driver
 adapter integration in the Electron main process.
 `npm audit --omit=dev` is currently clean (0 runtime vulnerabilities) on this
-workspace state.
+workspace state. Electron is a devDependency whose runtime ships in the
+installer, so `npm audit --audit-level=high` must also pass; the remaining
+moderate advisories are in build and lint tooling only.
+
+The SQLite driver uses `better-sqlite3` 13, which is built on N-API, so one
+prebuilt binary loads in both Node.js and Electron and no native rebuild is
+needed. The generated Prisma client in `node_modules/.prisma/client` is copied
+into the application archive explicitly because Electron Builder does not
+collect it as a dependency.
 
 Automated CI and manual release artifact workflows are defined in
 `.github/workflows/ci.yml` and `.github/workflows/release.yml`. The complete
