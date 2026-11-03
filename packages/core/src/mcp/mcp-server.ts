@@ -89,7 +89,10 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
     "notion_create_project_page_preview",
     {
       title: "Preview Notion project page creation",
-      description: "Create a transactional preview. This tool never writes to Notion.",
+      description: "Create a preview of a Notion project page. This tool never writes to Notion. "
+        + "Ask the user to review and approve the preview in the MCP Connector app, then call "
+        + "workflow_preview_status until it is APPROVED (then call notion_create_project_page) "
+        + "or REJECTED (then stop).",
       inputSchema: {
         workspacePath: z.string().min(1),
         title: z.string().min(1).max(200),
@@ -120,7 +123,9 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
     "workflow_preview_status",
     {
       title: "Get workflow preview status",
-      description: "Get the current status of a workflow preview by ID.",
+      description: "Get the status of a workflow preview: PREVIEWED (waiting for the user), "
+        + "APPROVED (ready to execute), REJECTED (the user declined; do not retry without asking), "
+        + "EXECUTING, EXECUTED or FAILED.",
       inputSchema: { previewId: z.string().uuid() },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
     },
