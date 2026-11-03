@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
@@ -25,7 +25,8 @@ import { AppSettingsStore } from "./settings/app-settings";
 import { isStdioMode, runStdioMode, STDIO_FLAG } from "./stdio/stdio-mode";
 import { createFileLogger } from "./logging/file-logger";
 import { describeStartupError } from "./logging/startup-error";
-import type { McpConnectorDependencies } from "@mcp-connector/core";
+import { createApprovalNotifier } from "./notifications/approval-notifier";
+import type { McpConnectorDependencies, WorkflowPreview } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -308,6 +309,37 @@ function registerIpcHandlers(
   ipcMain.handle("vscode:stop", () => connectionManager.stopVsCode());
 }
 
+// Notifications are kept referenced until closed; otherwise they can be
+// garbage-collected and their click handler lost.
+const shownNotifications = new Set<Notification>();
+
+function showMainWindow(): void {
+  const window = BrowserWindow.getAllWindows()[0] ?? createMainWindow();
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+
+/** Tells the user that an AI agent is waiting for their approval. */
+function announceApprovalRequest(preview: WorkflowPreview): void {
+  const window = BrowserWindow.getAllWindows()[0];
+  if (window !== undefined && !window.isFocused()) {
+    window.flashFrame(true);
+  }
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({
+    title: "An AI agent is asking for approval",
+    body: `${preview.summary}. Open MCP Connector to approve or reject it.`
+  });
+  shownNotifications.add(notification);
+  notification.on("click", () => {
+    shownNotifications.delete(notification);
+    showMainWindow();
+  });
+  notification.on("close", () => shownNotifications.delete(notification));
+  notification.show();
+}
+
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -322,6 +354,7 @@ function createMainWindow(): BrowserWindow {
     }
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.on("focus", () => window.flashFrame(false));
   window.webContents.on("will-navigate", (event, url) => {
     if (!isAllowedRendererUrl(url)) {
       event.preventDefault();
@@ -339,6 +372,10 @@ function createMainWindow(): BrowserWindow {
 
 async function startDesktopApp(): Promise<void> {
   const log = createFileLogger(app.getPath("logs"));
+  if (process.platform === "win32") {
+    // Windows shows notifications only for an app ID that matches the installer's.
+    app.setAppUserModelId("com.mcpconnector.desktop");
+  }
   log.info(`Starting MCP Connector ${app.getVersion()} on ${process.platform}.`);
   process.on("uncaughtExceptionMonitor", (error) => log.error("Uncaught exception.", error));
   configureElectronSecurity();
@@ -434,6 +471,10 @@ async function startDesktopApp(): Promise<void> {
       }
     }
     createMainWindow();
+    workflowService.subscribe(createApprovalNotifier(await workflowService.listPending(), (preview) => {
+      log.info(`An agent asked for approval: ${preview.summary}`);
+      announceApprovalRequest(preview);
+    }));
   } catch (error) {
     // The packaged app has no visible console, so say what happened before quitting.
     console.error("MCP Connector could not start.", error);
