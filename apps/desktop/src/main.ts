@@ -19,6 +19,7 @@ import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { startVsCodeContextServer, type VsCodeContextServerHandle } from "./security/vscode-context-server";
 import { AutoUpdateService } from "./updater/auto-update.service";
+import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import type { McpConnectorDependencies, McpHttpServerHandle } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -30,8 +31,6 @@ const oauthTokenService = new FetchOAuthTokenService();
 let mcpHttpServer: McpHttpServerHandle | null = null;
 let vsCodeContextServer: VsCodeContextServerHandle | null = null;
 let autoUpdateService: AutoUpdateService | null = null;
-
-const developmentRendererOrigin = "http://localhost:5173";
 
 function isAllowedRendererUrl(value: string): boolean {
   try {
@@ -46,17 +45,7 @@ function isAllowedRendererUrl(value: string): boolean {
 }
 
 function configureElectronSecurity(): void {
-  const contentSecurityPolicy = [
-    "default-src 'self'",
-    `script-src 'self'${isDevelopment ? ` ${developmentRendererOrigin}` : ""}`,
-    "style-src 'self'",
-    "img-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? ` ${developmentRendererOrigin} ws://localhost:5173` : ""}`,
-    "font-src 'self'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "frame-ancestors 'none'"
-  ].join("; ");
+  const contentSecurityPolicy = buildContentSecurityPolicy(isDevelopment ? "development" : "production");
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
