@@ -5,6 +5,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -93,6 +94,60 @@ async function waitForRender(page) {
   throw new Error("The window loaded but the app did not render.");
 }
 
+/** A new profile's key reaches the disk about ten seconds after the first launch. */
+async function readVaultKey() {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const key = JSON.parse(await readFile(join(userDataDir, "Local State"), "utf8")).os_crypt?.encrypted_key;
+      if (key !== undefined) return key;
+    } catch {
+      // Not written yet.
+    }
+    await delay(500);
+  }
+  throw new Error("The app did not save its encryption key.");
+}
+
+/** Runs a second copy with --mcp-stdio, sends one request, and returns the answer. */
+async function requestThroughStdio(request) {
+  const relay = spawn(executable, [`--user-data-dir=${userDataDir}`, "--mcp-stdio"], {
+    env,
+    stdio: ["pipe", "pipe", "ignore"]
+  });
+  const exited = new Promise((resolve) => relay.once("exit", resolve));
+  try {
+    const answer = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("The relay did not answer.")), 30_000);
+      relay.once("exit", (code) => reject(new Error(`The relay exited with code ${code} before answering.`)));
+      createInterface({ input: relay.stdout }).on("line", (line) => {
+        // On Windows, Electron itself prints one blank line before the app starts.
+        if (line.trim().length === 0) return;
+        clearTimeout(timer);
+        resolve(JSON.parse(line));
+      });
+      relay.stdin.write(`${JSON.stringify(request)}\n`);
+    });
+    relay.stdin.end();
+    const code = await Promise.race([exited, delay(10_000).then(() => "still running")]);
+    if (code !== 0) throw new Error(`After stdin closed, the relay's exit status was: ${code}.`);
+    return answer;
+  } finally {
+    relay.kill();
+  }
+}
+
+const initialize = {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "smoke-test", version: "1.0.0" }
+  }
+};
+
 const checks = [
   ["window loads", async (page) => {
     await waitForRender(page);
@@ -116,6 +171,25 @@ const checks = [
     } finally {
       await page.evaluate("window.desktopApi.mcp.stop()");
     }
+  }],
+  ["stdio relay says when the server is stopped, reaches it when running, and keeps the vault key", async (page) => {
+    // This runs before a new profile's key reaches the disk, which is when a
+    // relay sharing the profile could replace it.
+    const stopped = await requestThroughStdio(initialize);
+    if (!/not running/u.test(stopped.error?.message ?? "")) {
+      throw new Error(`Unexpected answer with the server stopped: ${JSON.stringify(stopped)}.`);
+    }
+    const key = await readVaultKey();
+    await page.evaluate("window.desktopApi.mcp.start()");
+    try {
+      const answer = await requestThroughStdio(initialize);
+      if (answer.result?.serverInfo?.name !== "mcp-connector") {
+        throw new Error(`Unexpected answer: ${JSON.stringify(answer)}.`);
+      }
+    } finally {
+      await page.evaluate("window.desktopApi.mcp.stop()");
+    }
+    if (await readVaultKey() !== key) throw new Error("The relay replaced the app's encryption key.");
   }],
   ["VS Code listener starts and stops", async (page) => {
     await page.evaluate("window.desktopApi.vscode.start()");

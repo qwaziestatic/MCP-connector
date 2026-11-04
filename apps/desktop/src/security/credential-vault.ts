@@ -24,8 +24,9 @@ export interface LocalSecretStore {
 }
 
 export class CredentialVault implements LocalSecretStore {
-  private readonly filePath = join(app.getPath("userData"), "credentials.json");
   private writeQueue: Promise<void> = Promise.resolve();
+
+  public constructor(private readonly filePath = join(app.getPath("userData"), "credentials.json")) {}
 
   async save(credential: StoredCredential): Promise<void> {
     if (!(await safeStorage.isAsyncEncryptionAvailable())) {
