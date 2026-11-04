@@ -37,6 +37,13 @@ describe("VaultTokenProvider", () => {
       .rejects.toThrow("Connect GitHub again");
   });
 
+  it("renews a token that is about to expire", async () => {
+    const vault = vaultWith({ ...expired, expiresAt: new Date(Date.now() + 30_000).toISOString() });
+    const refreshed: OAuthTokenSet = { accessToken: "new", refreshToken: "refresh-2", expiresAt: null, tokenType: "bearer", scope: null };
+
+    await expect(new VaultTokenProvider(vault, "notion", async () => refreshed).getAccessToken()).resolves.toBe("new");
+  });
+
   it("refreshes an expired token once and saves it", async () => {
     const vault = vaultWith(expired);
     const refreshed: OAuthTokenSet = { accessToken: "new", refreshToken: "refresh-2", expiresAt: null, tokenType: "bearer", scope: null };
