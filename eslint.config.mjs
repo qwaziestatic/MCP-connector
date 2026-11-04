@@ -10,6 +10,7 @@ export default [
       "**/out/**",
       "**/dist/**",
       "**/release/**",
+      "**/.wrangler/**",
       "**/*.d.ts"
     ]
   },

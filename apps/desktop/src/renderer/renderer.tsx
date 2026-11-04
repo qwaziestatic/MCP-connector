@@ -28,7 +28,7 @@ function formatTime(value: string): string {
 /** The main process's message, without Electron's "Error invoking remote method" prefix. */
 function ipcErrorMessage(cause: unknown, fallback: string): string {
   if (!(cause instanceof Error)) return fallback;
-  return cause.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "");
+  return cause.message.replace(/^Error invoking remote method '[^']+': (?:[A-Za-z]*Error: )?/, "");
 }
 
 function formatDate(value: string): string {
@@ -100,6 +100,9 @@ export function App(): JSX.Element {
   // Shown while the user enters the code on github.com.
   const [githubCode, setGitHubCode] = useState<GitHubSignInCode | null>(null);
   const githubCancelled = useRef(false);
+  // Shown while the user allows access in the browser.
+  const [waitingForNotion, setWaitingForNotion] = useState(false);
+  const notionCancelled = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,22 +203,37 @@ export function App(): JSX.Element {
     await window.desktopApi.credentials.cancelGitHub();
   };
 
+  const connectNotion = async (): Promise<void> => {
+    setError(null);
+    notionCancelled.current = false;
+    setWaitingForNotion(true);
+    try {
+      await window.desktopApi.credentials.connect("notion");
+      setConnectionStatus(await window.desktopApi.credentials.getStatus());
+    } catch (cause: unknown) {
+      if (!notionCancelled.current) setError(ipcErrorMessage(cause, "Notion sign-in failed."));
+    } finally {
+      setWaitingForNotion(false);
+    }
+  };
+
+  const cancelNotion = async (): Promise<void> => {
+    notionCancelled.current = true;
+    await window.desktopApi.credentials.cancelNotion();
+  };
+
   const updateConnection = async (
     provider: "github" | "notion",
     connected: boolean
   ): Promise<void> => {
-    if (provider === "github" && !connected) {
-      await connectGitHub();
+    if (!connected) {
+      await (provider === "github" ? connectGitHub() : connectNotion());
       return;
     }
     setError(null);
     setBusy(true);
     try {
-      if (connected) {
-        await window.desktopApi.credentials.disconnect(provider);
-      } else if (provider === "notion") {
-        await window.desktopApi.credentials.connect(provider);
-      }
+      await window.desktopApi.credentials.disconnect(provider);
       setConnectionStatus(await window.desktopApi.credentials.getStatus());
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : `Unable to update ${provider} connection.`);
@@ -527,6 +545,7 @@ export function App(): JSX.Element {
         <div className="integration-list">
           {(["github", "notion"] as const).map((provider) => {
             const waitingForGitHub = provider === "github" && githubCode !== null;
+            const waiting = waitingForGitHub || (provider === "notion" && waitingForNotion);
             return (
               <div key={provider}>
                 <div className="integration-row">
@@ -535,13 +554,15 @@ export function App(): JSX.Element {
                     <p className="muted">
                       {waitingForGitHub
                         ? "Waiting for you to approve on github.com"
-                        : connectionStatus[provider] ? "Connected" : "Not connected"}
+                        : waiting
+                          ? "Waiting for you to allow access in your browser"
+                          : connectionStatus[provider] ? "Connected" : "Not connected"}
                     </p>
                   </div>
                   <button
                     className={`button ${connectionStatus[provider] ? "danger" : "secondary"}`}
                     onClick={() => void updateConnection(provider, connectionStatus[provider])}
-                    disabled={busy || waitingForGitHub}
+                    disabled={busy || waiting}
                   >
                     {connectionStatus[provider] ? "Disconnect" : "Connect"}
                   </button>
@@ -558,6 +579,17 @@ export function App(): JSX.Element {
                         {copied === "github-code" ? "Code copied" : "Copy code and open GitHub"}
                       </button>
                       <button className="button ghost" onClick={() => void cancelGitHub()}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+                {provider === "notion" && waitingForNotion && (
+                  <div className="device-code" role="status">
+                    <div>
+                      <p>Finish in your browser: choose the pages MCP Connector may use, then allow access.</p>
+                      <p className="muted">MCP Connector notices as soon as you allow access.</p>
+                    </div>
+                    <div className="actions">
+                      <button className="button ghost" onClick={() => void cancelNotion()}>Cancel</button>
                     </div>
                   </div>
                 )}

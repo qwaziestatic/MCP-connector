@@ -1,0 +1,7 @@
+# Notion sign-in service for MCP Connector. See README.md in this folder.
+name = "mcp-connector-notion-sign-in"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# NOTION_CLIENT_ID and NOTION_CLIENT_SECRET are set with `wrangler secret put`,
+# never in this file.

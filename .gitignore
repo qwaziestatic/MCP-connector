@@ -29,6 +29,10 @@ release/
 *.db-shm
 *.db-wal
 
+# Cloudflare Wrangler: local state and local secrets for `wrangler dev`
+.wrangler/
+.dev.vars
+
 # Logs and local tooling state
 *.log
 .eslintcache

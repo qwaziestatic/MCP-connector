@@ -53,6 +53,7 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .integration-row p { margin: 4px 0 0; }
 .device-code { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 14px; padding: 16px; border: 1px solid #2c5a8a; border-radius: 10px; background: #0f2036; }
 .device-code p { margin: 0; }
+.device-code p + p { margin-top: 6px; }
 .device-code-value { display: inline-block; margin: 10px 0; padding: 8px 14px; border-radius: 8px; background: #0b1524; color: #f3f7fb; font-size: 22px; font-weight: 800; letter-spacing: .18em; user-select: all; }
 .device-code .actions { flex-shrink: 0; margin-top: 0; }
 .queue-item { flex: 1; min-width: 0; }

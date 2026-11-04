@@ -1,0 +1,14 @@
+{
+  "name": "@mcp-connector/notion-sign-in-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that keeps Notion's client secret out of the MCP Connector installer.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"src/*.test.ts\"",
+    "dev": "npx --yes wrangler@4 dev",
+    "deploy": "npx --yes wrangler@4 deploy"
+  }
+}

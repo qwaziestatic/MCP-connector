@@ -6,17 +6,17 @@ import {
   createNotionPagePreview,
   executeNotionPagePreview,
   FilesystemService,
-  FetchOAuthTokenService,
   GitHubDeviceFlow,
+  NotionSignInClient,
   OfficialNotionConnector,
   OctokitGitHubConnector,
-  OAuthPkceService,
   PrismaAuditRepository,
   WorkflowService
 } from "@mcp-connector/core";
 import { CredentialVault } from "./security/credential-vault";
 import { OAuthCallbackServer } from "./security/oauth-callback-server";
 import { GitHubSignIn } from "./security/github-sign-in";
+import { NotionSignIn } from "./security/notion-sign-in";
 import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
@@ -24,7 +24,7 @@ import { buildAgentConfigs } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
-import { readGitHubClientId } from "./settings/sign-in-config";
+import { readGitHubClientId, readNotionSignInUrl } from "./settings/sign-in-config";
 import { isStdioMode, runStdioMode, STDIO_FLAG, useRelayProfile } from "./stdio/stdio-mode";
 import { createFileLogger } from "./logging/file-logger";
 import { describeStartupError } from "./logging/startup-error";
@@ -35,8 +35,6 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const filesystemService = new FilesystemService();
-const oauthPkceService = new OAuthPkceService();
-const oauthTokenService = new FetchOAuthTokenService();
 let connections: AgentConnectionManager | null = null;
 let autoUpdateService: AutoUpdateService | null = null;
 // Problems found while starting, such as a busy port, shown once in the window.
@@ -74,23 +72,9 @@ function configureElectronSecurity(): void {
 /** What the GitHub tools need: the user's profile and their repositories. */
 const GITHUB_SCOPES = ["read:user", "repo"];
 
-function getNotionOAuthConfig() {
-  const clientId = process.env.MCP_NOTION_CLIENT_ID;
-  const clientSecret = process.env.MCP_NOTION_CLIENT_SECRET;
-  if (clientId === undefined || clientId.trim().length === 0) {
-    throw new Error("notion OAuth client ID is not configured.");
-  }
-
-  const config = {
-    provider: "notion" as const,
-    authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
-    tokenEndpoint: "https://api.notion.com/v1/oauth/token",
-    clientId,
-    scopes: [],
-    // Notion requires owner=user on every authorization request.
-    authorizationParams: { owner: "user" }
-  };
-  return clientSecret === undefined ? config : { ...config, clientSecret };
+/** Notion's client secret lives in the sign-in service, never in the app. */
+function createNotionSignInClient(): NotionSignInClient {
+  return new NotionSignInClient(readNotionSignInUrl());
 }
 
 function getNotionDatabaseId(): string | undefined {
@@ -102,8 +86,8 @@ function registerIpcHandlers(
   workflowService: WorkflowService,
   auditRepository: PrismaAuditRepository,
   credentialVault: CredentialVault,
-  oauthCallbackServer: OAuthCallbackServer,
   githubSignIn: GitHubSignIn,
+  notionSignIn: NotionSignIn,
   getNotionConnector: () => OfficialNotionConnector,
   connectionManager: AgentConnectionManager,
   settings: AppSettingsStore
@@ -247,38 +231,14 @@ function registerIpcHandlers(
   ipcMain.handle("credentials:github-wait", () => githubSignIn.waitForToken());
   ipcMain.handle("credentials:github-cancel", () => githubSignIn.cancel());
 
+  // Notion signs in through the browser and the Notion sign-in service.
   ipcMain.handle("credentials:connect", async (_event, provider: unknown) => {
     if (provider !== "notion") {
       throw new Error("Unsupported OAuth provider.");
     }
-
-    const redirectUri = await oauthCallbackServer.start();
-    try {
-      const authorization = oauthPkceService.beginAuthorization(
-        getNotionOAuthConfig(),
-        redirectUri
-      );
-      await shell.openExternal(authorization.authorizationUrl);
-      const callback = await oauthCallbackServer.waitForCallback();
-      const codeVerifier = oauthPkceService.consumeAuthorization(callback.state, provider);
-      const tokenSet = await oauthTokenService.exchangeCode(
-        getNotionOAuthConfig(),
-        callback.code,
-        codeVerifier,
-        redirectUri
-      );
-      await credentialVault.save({
-        provider,
-        accessToken: tokenSet.accessToken,
-        refreshToken: tokenSet.refreshToken,
-        expiresAt: tokenSet.expiresAt,
-        tokenType: tokenSet.tokenType,
-        scope: tokenSet.scope
-      });
-    } finally {
-      await oauthCallbackServer.close();
-    }
+    await notionSignIn.connect();
   });
+  ipcMain.handle("credentials:notion-cancel", () => notionSignIn.cancel());
 
   ipcMain.handle("credentials:disconnect", async (_event, provider: unknown) => {
     if (provider !== "github" && provider !== "notion") {
@@ -397,7 +357,12 @@ async function startDesktopApp(): Promise<void> {
     const auditRepository = new PrismaAuditRepository(prisma);
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
-    const oauthCallbackServer = new OAuthCallbackServer();
+    const notionSignIn = new NotionSignIn(
+      createNotionSignInClient,
+      () => new OAuthCallbackServer(),
+      credentialVault,
+      (url) => shell.openExternal(url)
+    );
     const githubSignIn = new GitHubSignIn(
       () => new GitHubDeviceFlow(readGitHubClientId(), GITHUB_SCOPES),
       credentialVault,
@@ -419,7 +384,7 @@ async function startDesktopApp(): Promise<void> {
         new VaultTokenProvider(
           credentialVault,
           "notion",
-          (refreshToken) => oauthTokenService.refreshAccessToken(getNotionOAuthConfig(), refreshToken)
+          (refreshToken) => createNotionSignInClient().refresh(refreshToken)
         ),
         { databaseId: notionDatabaseId }
       );
@@ -451,8 +416,8 @@ async function startDesktopApp(): Promise<void> {
       workflowService,
       auditRepository,
       credentialVault,
-      oauthCallbackServer,
       githubSignIn,
+      notionSignIn,
       getNotionConnector,
       connectionManager,
       settings

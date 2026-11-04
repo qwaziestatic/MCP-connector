@@ -62,15 +62,31 @@ Use an OAuth app, not a GitHub App: OAuth app tokens do not expire, so the app
 has nothing to refresh. `MCP_GITHUB_CLIENT_ID` set when the app starts
 overrides the built-in value, which is useful in `npm run dev`.
 
+### Notion
+
+Notion's token endpoint needs the integration's client secret, which cannot be
+kept inside an installer. A small Cloudflare Worker,
+[`apps/notion-sign-in-worker`](./apps/notion-sign-in-worker/README.md), holds
+the secret and exchanges the sign-in code for the app. Its README walks through
+creating the Notion integration and deploying the Worker.
+
+Once it is deployed, build the installer with the Worker's address:
+
+```powershell
+$env:MCP_NOTION_SIGN_IN_URL = "https://mcp-connector-notion-sign-in.<your-subdomain>.workers.dev"
+npm run package:win
+```
+
+For the release workflow, add a repository variable named
+`MCP_NOTION_SIGN_IN_URL`, next to `MCP_GITHUB_CLIENT_ID`. The address is not a
+secret. `MCP_NOTION_SIGN_IN_URL` set when the app starts overrides the built-in
+value; `http://127.0.0.1:8787` works with `npm run dev` in the Worker's folder.
+
 ## Runtime configuration
 
-Notion's client ID and secret are runtime configuration. Do not add them to the
-installer, source tree, or renderer bundle. Configure these environment
-variables before starting the application:
+Configure these environment variables before starting the application:
 
-- `MCP_NOTION_CLIENT_ID`
-- `MCP_NOTION_CLIENT_SECRET`
-- `MCP_NOTION_DATABASE_ID`
+- `MCP_NOTION_DATABASE_ID` (the database the Notion tools add pages to)
 - `MCP_HTTP_ENABLED` (set to `true` to always start the MCP server at launch;
   without it, the server starts at launch if it was running when the app last closed)
 - `MCP_UPDATER_ENABLED` (set to `true` to enable update checks)

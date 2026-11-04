@@ -3,5 +3,6 @@ export * from "./github.connector.js";
 export * from "./github-device-flow.js";
 export * from "./notion.connector.js";
 export * from "./notion-page.js";
+export * from "./notion-sign-in.client.js";
 export * from "./oauth-pkce.service.js";
 export * from "./oauth-token.service.js";
