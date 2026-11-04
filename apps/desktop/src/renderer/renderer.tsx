@@ -1,5 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AuditRecord,
   WorkflowPreview,
@@ -35,7 +34,7 @@ function formatPayload(payload: Readonly<Record<string, unknown>>): string {
     .join("\n");
 }
 
-function App(): JSX.Element {
+export function App(): JSX.Element {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [preview, setPreview] = useState<WorkflowPreview | null>(null);
@@ -599,12 +598,3 @@ function App(): JSX.Element {
     </main>
   );
 }
-
-const rootElement = document.getElementById("root");
-if (rootElement === null) throw new Error("Renderer root element was not found.");
-
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
