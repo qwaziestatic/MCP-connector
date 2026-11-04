@@ -63,10 +63,13 @@ function configureElectronSecurity(): void {
       }
     });
   });
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+  // Everything is denied except writing text to the clipboard, which the Copy
+  // buttons need. Reading the clipboard stays denied.
+  const isAllowedPermission = (permission: string): boolean => permission === "clipboard-sanitized-write";
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(isAllowedPermission(permission));
   });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => isAllowedPermission(permission));
 }
 
 /** What the GitHub tools need: the user's profile and their repositories. */
