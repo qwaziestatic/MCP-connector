@@ -3,7 +3,7 @@ import path, { dirname, relative, resolve } from "node:path";
 
 export interface WorkspaceEntry {
   readonly relativePath: string;
-  readonly type: "file" | "directory";
+  readonly type: "file" | "directory" | "symlink";
   readonly sizeBytes: number;
 }
 
@@ -77,7 +77,13 @@ async function walkDirectory(
       throw new Error(`Resolved path escapes workspace: ${entry.name}`);
     }
     if (entry.isSymbolicLink()) {
-      throw new Error(`Symbolic links are not allowed in workspace: ${entry.name}`);
+      // Listed but never followed, so a link cannot lead outside the workspace.
+      entries.push({
+        relativePath: relative(workspacePath, entryPath),
+        type: "symlink",
+        sizeBytes: 0
+      });
+      continue;
     }
 
     if (entry.isDirectory()) {

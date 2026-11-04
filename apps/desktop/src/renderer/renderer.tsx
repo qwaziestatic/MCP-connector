@@ -8,6 +8,12 @@ import type {
 import type { VsCodeContext } from "../security/vscode-context-server";
 import "./styles.css";
 
+const entryLabels: Readonly<Record<WorkspaceSnapshot["entries"][number]["type"], string>> = {
+  file: "FILE",
+  directory: "DIR",
+  symlink: "LINK"
+};
+
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
@@ -367,7 +373,7 @@ export function App(): JSX.Element {
               <div className="file-list">
                 {snapshot.entries.slice(0, 12).map((entry) => (
                   <div className="file-row" key={entry.relativePath}>
-                    <span>{entry.type === "directory" ? "DIR" : "FILE"} {entry.relativePath}</span>
+                    <span>{entryLabels[entry.type]} {entry.relativePath}</span>
                     <span className="muted">{entry.type === "file" ? formatBytes(entry.sizeBytes) : ""}</span>
                   </div>
                 ))}

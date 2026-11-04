@@ -41,16 +41,20 @@ describe("FilesystemService", () => {
     );
   });
 
-  it("rejects symlinked directory entries that escape the workspace", async () => {
+  it("lists links without following them out of the workspace", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "mcp-connector-"));
     const outside = await mkdtemp(join(tmpdir(), "mcp-connector-outside-"));
     temporaryDirectories.push(workspace, outside);
     await writeFile(join(outside, "secret.txt"), "secret");
+    await writeFile(join(workspace, "index.ts"), "export {};");
     await symlink(outside, join(workspace, "linked"), "junction");
 
-    await expect(new FilesystemService().inspectWorkspace(workspace)).rejects.toThrow(
-      "Symbolic links are not allowed"
-    );
+    const snapshot = await new FilesystemService().inspectWorkspace(workspace);
+
+    expect(snapshot.entries.map((entry) => [entry.relativePath, entry.type]).sort()).toEqual([
+      ["index.ts", "file"],
+      ["linked", "symlink"]
+    ]);
   });
 
   it("restricts inspection to the selected workspace root", async () => {
