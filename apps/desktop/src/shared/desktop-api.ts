@@ -78,8 +78,12 @@ export interface DesktopApi {
   };
   readonly credentials: {
     readonly getStatus: () => Promise<Readonly<Record<"github" | "notion", boolean>>>;
-    /** Notion only: GitHub signs in with startGitHub() and waitForGitHub(). */
+    /**
+     * Notion only: opens the browser and resolves once the user allows access.
+     * GitHub signs in with startGitHub() and waitForGitHub().
+     */
     readonly connect: (provider: "notion") => Promise<void>;
+    readonly cancelNotion: () => Promise<void>;
     /** Gets a code for the user to enter on github.com. */
     readonly startGitHub: () => Promise<GitHubSignInCode>;
     /** Opens github.com's code page in the browser. */

@@ -14,7 +14,8 @@ The repository contains the feature-complete MVP implementation:
 - Human-in-the-loop previews for mutating actions
 - Durable workflow previews and audit logging
 - DPAPI-backed credential storage through Electron `safeStorage`
-- OAuth PKCE flows with token refresh support
+- GitHub sign-in with a short code (device flow) and Notion sign-in through a
+  small sign-in service, so no client secret ships in the installer
 - GitHub and Notion connectors
 - Authenticated loopback MCP HTTP and stdio transports
 - Authenticated VS Code context listener and companion extension

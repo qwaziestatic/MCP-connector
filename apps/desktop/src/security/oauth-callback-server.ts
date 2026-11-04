@@ -50,17 +50,25 @@ export class OAuthCallbackServer {
     return this.callbackUrl;
   }
 
-  async waitForCallback(timeoutMs = 120_000): Promise<OAuthCallbackResult> {
+  async waitForCallback(timeoutMs = 120_000, signal?: AbortSignal): Promise<OAuthCallbackResult> {
     if (this.server === null) {
       throw new Error("OAuth callback server has not been started.");
+    }
+    if (signal?.aborted === true) {
+      throw new Error("Sign-in was cancelled.");
     }
 
     const server = this.server;
     return new Promise<OAuthCallbackResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new Error("OAuth callback timed out."));
+        reject(new Error("Sign-in timed out. Click Connect to try again."));
       }, timeoutMs);
+      const onAbort = (): void => {
+        cleanup();
+        reject(new Error("Sign-in was cancelled."));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       const onRequest = (request: import("node:http").IncomingMessage): void => {
         const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -69,7 +77,9 @@ export class OAuthCallbackServer {
         const state = requestUrl.searchParams.get("state");
         const error = requestUrl.searchParams.get("error");
         cleanup();
-        if (error !== null) {
+        if (error === "access_denied") {
+          reject(new Error("Sign-in was declined in the browser."));
+        } else if (error !== null) {
           reject(new Error(`OAuth provider rejected authorization: ${error}`));
         } else if (code === null || state === null) {
           reject(new Error("OAuth callback did not include code and state."));
@@ -80,6 +90,7 @@ export class OAuthCallbackServer {
 
       const cleanup = (): void => {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
         server.removeListener("request", onRequest);
       };
 

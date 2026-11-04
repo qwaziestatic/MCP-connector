@@ -45,13 +45,17 @@ a real Windows machine, provider accounts, or release credentials.
 
 ## Provider validation
 
-- [ ] Configure GitHub OAuth redirect URI for the local callback.
-- [ ] Test GitHub authorization, refresh, disconnect, revoked token, and rate
-      limit behavior.
-- [ ] Configure Notion OAuth and database access.
-- [ ] Test Notion authorization, refresh, permission failure, and page
-      creation after explicit approval.
-- [ ] Remove provider secrets from the test machine after validation.
+- [ ] Create the GitHub OAuth app with device flow turned on, and set the
+      `MCP_GITHUB_CLIENT_ID` repository variable (DEPLOYMENT.md, "Sign-in setup").
+- [ ] Test GitHub sign-in with the code, a declined and an expired code,
+      Cancel, disconnect, a revoked token, and rate limit behavior.
+- [ ] Deploy `apps/notion-sign-in-worker`, register its `/notion/callback`
+      address on the Notion integration, and set the `MCP_NOTION_SIGN_IN_URL`
+      repository variable. Its home page must say it is running.
+- [ ] Test Notion sign-in, a declined sign-in, Cancel, permission failure,
+      and page creation after explicit approval.
+- [ ] Confirm the installer contains no client secret: only the GitHub client
+      ID and the sign-in service address are built in.
 
 ## Auto-update validation
 

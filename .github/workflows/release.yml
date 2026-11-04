@@ -52,6 +52,7 @@ jobs:
         env:
           # Public sign-in settings built into the app; see DEPLOYMENT.md.
           MCP_GITHUB_CLIENT_ID: ${{ vars.MCP_GITHUB_CLIENT_ID }}
+          MCP_NOTION_SIGN_IN_URL: ${{ vars.MCP_NOTION_SIGN_IN_URL }}
 
       - name: Launch the packaged app
         run: npm run smoke-test --workspace=@mcp-connector/desktop
