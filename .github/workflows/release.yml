@@ -49,6 +49,9 @@ jobs:
 
       - name: Build Windows installer
         run: npm run package:win
+        env:
+          # Public sign-in settings built into the app; see DEPLOYMENT.md.
+          MCP_GITHUB_CLIENT_ID: ${{ vars.MCP_GITHUB_CLIENT_ID }}
 
       - name: Launch the packaged app
         run: npm run smoke-test --workspace=@mcp-connector/desktop

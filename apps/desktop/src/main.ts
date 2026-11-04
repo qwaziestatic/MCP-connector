@@ -7,6 +7,7 @@ import {
   executeNotionPagePreview,
   FilesystemService,
   FetchOAuthTokenService,
+  GitHubDeviceFlow,
   OfficialNotionConnector,
   OctokitGitHubConnector,
   OAuthPkceService,
@@ -15,6 +16,7 @@ import {
 } from "@mcp-connector/core";
 import { CredentialVault } from "./security/credential-vault";
 import { OAuthCallbackServer } from "./security/oauth-callback-server";
+import { GitHubSignIn } from "./security/github-sign-in";
 import { VaultTokenProvider } from "./security/vault-token-provider";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
@@ -22,6 +24,7 @@ import { buildAgentConfigs } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
+import { readGitHubClientId } from "./settings/sign-in-config";
 import { isStdioMode, runStdioMode, STDIO_FLAG, useRelayProfile } from "./stdio/stdio-mode";
 import { createFileLogger } from "./logging/file-logger";
 import { describeStartupError } from "./logging/startup-error";
@@ -68,34 +71,25 @@ function configureElectronSecurity(): void {
   session.defaultSession.setPermissionCheckHandler(() => false);
 }
 
-function getOAuthConfig(provider: "github" | "notion") {
-  const clientId = provider === "github"
-    ? process.env.MCP_GITHUB_CLIENT_ID
-    : process.env.MCP_NOTION_CLIENT_ID;
-  const clientSecret = provider === "github"
-    ? process.env.MCP_GITHUB_CLIENT_SECRET
-    : process.env.MCP_NOTION_CLIENT_SECRET;
+/** What the GitHub tools need: the user's profile and their repositories. */
+const GITHUB_SCOPES = ["read:user", "repo"];
+
+function getNotionOAuthConfig() {
+  const clientId = process.env.MCP_NOTION_CLIENT_ID;
+  const clientSecret = process.env.MCP_NOTION_CLIENT_SECRET;
   if (clientId === undefined || clientId.trim().length === 0) {
-    throw new Error(`${provider} OAuth client ID is not configured.`);
+    throw new Error("notion OAuth client ID is not configured.");
   }
 
-  const config = provider === "github"
-    ? {
-        provider,
-        authorizationEndpoint: "https://github.com/login/oauth/authorize",
-        tokenEndpoint: "https://github.com/login/oauth/access_token",
-        clientId,
-        scopes: ["read:user", "repo"]
-      }
-    : {
-        provider,
-        authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
-        tokenEndpoint: "https://api.notion.com/v1/oauth/token",
-        clientId,
-        scopes: [],
-        // Notion requires owner=user on every authorization request.
-        authorizationParams: { owner: "user" }
-      };
+  const config = {
+    provider: "notion" as const,
+    authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
+    tokenEndpoint: "https://api.notion.com/v1/oauth/token",
+    clientId,
+    scopes: [],
+    // Notion requires owner=user on every authorization request.
+    authorizationParams: { owner: "user" }
+  };
   return clientSecret === undefined ? config : { ...config, clientSecret };
 }
 
@@ -109,6 +103,7 @@ function registerIpcHandlers(
   auditRepository: PrismaAuditRepository,
   credentialVault: CredentialVault,
   oauthCallbackServer: OAuthCallbackServer,
+  githubSignIn: GitHubSignIn,
   getNotionConnector: () => OfficialNotionConnector,
   connectionManager: AgentConnectionManager,
   settings: AppSettingsStore
@@ -245,22 +240,29 @@ function registerIpcHandlers(
     notion: await credentialVault.has("notion")
   }));
 
+  // GitHub uses the device flow: the window shows a code, the user enters it
+  // on github.com, and no client secret is needed.
+  ipcMain.handle("credentials:github-start", () => githubSignIn.start());
+  ipcMain.handle("credentials:github-open", () => githubSignIn.openVerificationPage());
+  ipcMain.handle("credentials:github-wait", () => githubSignIn.waitForToken());
+  ipcMain.handle("credentials:github-cancel", () => githubSignIn.cancel());
+
   ipcMain.handle("credentials:connect", async (_event, provider: unknown) => {
-    if (provider !== "github" && provider !== "notion") {
+    if (provider !== "notion") {
       throw new Error("Unsupported OAuth provider.");
     }
 
     const redirectUri = await oauthCallbackServer.start();
     try {
       const authorization = oauthPkceService.beginAuthorization(
-        getOAuthConfig(provider),
+        getNotionOAuthConfig(),
         redirectUri
       );
       await shell.openExternal(authorization.authorizationUrl);
       const callback = await oauthCallbackServer.waitForCallback();
       const codeVerifier = oauthPkceService.consumeAuthorization(callback.state, provider);
       const tokenSet = await oauthTokenService.exchangeCode(
-        getOAuthConfig(provider),
+        getNotionOAuthConfig(),
         callback.code,
         codeVerifier,
         redirectUri
@@ -396,6 +398,11 @@ async function startDesktopApp(): Promise<void> {
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
     const oauthCallbackServer = new OAuthCallbackServer();
+    const githubSignIn = new GitHubSignIn(
+      () => new GitHubDeviceFlow(readGitHubClientId(), GITHUB_SCOPES),
+      credentialVault,
+      (url) => shell.openExternal(url)
+    );
     const settings = new AppSettingsStore(join(app.getPath("userData"), "settings.json"));
     // Restore the workspace chosen in an earlier session, so MCP tools work
     // after a restart without the user choosing it again.
@@ -412,8 +419,7 @@ async function startDesktopApp(): Promise<void> {
         new VaultTokenProvider(
           credentialVault,
           "notion",
-          () => getOAuthConfig("notion"),
-          (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
+          (refreshToken) => oauthTokenService.refreshAccessToken(getNotionOAuthConfig(), refreshToken)
         ),
         { databaseId: notionDatabaseId }
       );
@@ -423,12 +429,8 @@ async function startDesktopApp(): Promise<void> {
     const getMcpDependencies = (): McpConnectorDependencies => ({
       filesystem: filesystemService,
       workflow: workflowService,
-      github: new OctokitGitHubConnector(new VaultTokenProvider(
-        credentialVault,
-        "github",
-        () => getOAuthConfig("github"),
-        (config, refreshToken) => oauthTokenService.refreshAccessToken(config, refreshToken)
-      )),
+      // GitHub OAuth app tokens do not expire, so there is nothing to refresh.
+      github: new OctokitGitHubConnector(new VaultTokenProvider(credentialVault, "github", null)),
       ...(getNotionDatabaseId() === undefined ? {} : { notion: getNotionConnector() })
     });
     const connectionManager = new AgentConnectionManager({
@@ -450,6 +452,7 @@ async function startDesktopApp(): Promise<void> {
       auditRepository,
       credentialVault,
       oauthCallbackServer,
+      githubSignIn,
       getNotionConnector,
       connectionManager,
       settings
