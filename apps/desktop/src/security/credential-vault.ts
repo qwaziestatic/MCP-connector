@@ -26,9 +26,24 @@ export interface LocalSecretStore {
 export class CredentialVault implements LocalSecretStore {
   private writeQueue: Promise<void> = Promise.resolve();
 
-  public constructor(private readonly filePath = join(app.getPath("userData"), "credentials.json")) {}
+  public constructor(
+    private readonly filePath = join(app.getPath("userData"), "credentials.json"),
+    /**
+     * A read-only vault never writes the file, not even to re-encrypt under a
+     * rotated key. The stdio relay uses one, so it cannot race the app's own
+     * writes and lose a credential the app is saving at the same moment.
+     */
+    private readonly options: { readonly readOnly?: boolean } = {}
+  ) {}
+
+  private assertWritable(): void {
+    if (this.options.readOnly === true) {
+      throw new Error("This credential vault is read-only.");
+    }
+  }
 
   async save(credential: StoredCredential): Promise<void> {
+    this.assertWritable();
     if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
@@ -55,7 +70,7 @@ export class CredentialVault implements LocalSecretStore {
     if (!this.isCredential(parsed, provider)) {
       throw new Error(`Stored ${provider} credential has an invalid shape.`);
     }
-    if (decrypted.shouldReEncrypt) {
+    if (decrypted.shouldReEncrypt && this.options.readOnly !== true) {
       // The OS key was rotated; store the credential under the current key.
       await this.save(parsed);
     }
@@ -63,6 +78,7 @@ export class CredentialVault implements LocalSecretStore {
   }
 
   async remove(provider: StoredCredential["provider"]): Promise<void> {
+    this.assertWritable();
     await this.enqueueWrite(async () => {
       const contents = await this.readFile();
       delete contents[provider];
@@ -82,13 +98,14 @@ export class CredentialVault implements LocalSecretStore {
     const encrypted = (await this.readFile())[`secret:${name}`];
     if (encrypted === undefined) return null;
     const decrypted = await safeStorage.decryptStringAsync(Buffer.from(encrypted, "base64"));
-    if (decrypted.shouldReEncrypt) {
+    if (decrypted.shouldReEncrypt && this.options.readOnly !== true) {
       await this.saveSecret(name, decrypted.result);
     }
     return decrypted.result;
   }
 
   async saveSecret(name: LocalSecretName, value: string): Promise<void> {
+    this.assertWritable();
     if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
