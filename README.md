@@ -77,6 +77,23 @@ npm run package:vscode
 The generated installer, VSIX, and other build artifacts are ignored by Git.
 Publish them as release assets rather than committing them to the source tree.
 
+## Agent skill
+
+`skills/mcp-connector` is an agent skill in the open `SKILL.md` format. It
+tells any agent that has the `mcp-connector` tools when to use them, and the
+rules for changes: preview first, wait for the user's approval in the app,
+and never report a change before it happened. `references/` holds the tool
+list and the setup steps for each agent. A test in `packages/core` fails if
+the tool list and the server's tools ever differ.
+
+To upload it to a skill marketplace such as Agensi:
+
+```powershell
+npm run package:skill
+```
+
+This checks the frontmatter and writes `release/mcp-connector-skill.zip`.
+
 ## Adding a connector
 
 Each service is one `ConnectorDefinition` in `packages/core/src/connectors`;
@@ -96,7 +113,8 @@ definition gives:
 
 Add the definition to `createBuiltInConnectors` in `built-in.ts`. The vault,
 the connections card, the settings file, and the MCP server pick it up from
-there. Tools read sign-in and settings when they run, so connecting a service
+there. Add its tools to `skills/mcp-connector/references/tools.md` and
+`SKILL.md`; the skill test lists any that are missing. Tools read sign-in and settings when they run, so connecting a service
 or changing a setting reaches a server that is already running.
 
 ## Security model

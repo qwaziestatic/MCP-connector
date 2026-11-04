@@ -19,7 +19,8 @@
     "prisma:generate": "npm run prisma:generate --workspace=@mcp-connector/core",
     "prisma:migrate": "npm run prisma:migrate --workspace=@mcp-connector/core",
     "build:vscode": "npm run build --workspace=apps/vscode-extension",
-    "package:vscode": "npm run package --workspace=apps/vscode-extension"
+    "package:vscode": "npm run package --workspace=apps/vscode-extension",
+    "package:skill": "node scripts/package-skill.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
