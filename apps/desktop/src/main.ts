@@ -397,8 +397,13 @@ async function startDesktopApp(): Promise<void> {
     const getMcpDependencies = (): McpConnectorDependencies => ({
       filesystem: filesystemService,
       workflow: workflowService,
-      // GitHub OAuth app tokens do not expire, so there is nothing to refresh.
-      github: new OctokitGitHubConnector(new VaultTokenProvider(credentialVault, "github", null)),
+      // Tokens expire only if the OAuth app has "Expire user access tokens" on;
+      // device-flow tokens then renew without a client secret.
+      github: new OctokitGitHubConnector(new VaultTokenProvider(
+        credentialVault,
+        "github",
+        (refreshToken) => new GitHubDeviceFlow(readGitHubClientId(), GITHUB_SCOPES).refresh(refreshToken)
+      )),
       ...(getNotionDatabaseId() === undefined ? {} : { notion: getNotionConnector() })
     });
     const connectionManager = new AgentConnectionManager({

@@ -90,6 +90,37 @@ describe("GitHubDeviceFlow", () => {
     await expect(flow.waitForToken(authorization)).rejects.toThrow("expired before it was entered");
   });
 
+  it("returns the expiry and refresh token when the OAuth app's tokens expire", async () => {
+    const { flow } = fakeGitHub([
+      { access_token: "ghu_token", token_type: "bearer", scope: "", expires_in: 28_800, refresh_token: "ghr_refresh", refresh_token_expires_in: 15_811_200 }
+    ]);
+    const token = await flow.waitForToken(await flow.start());
+
+    // The clock had moved on by one poll interval.
+    expect(token).toMatchObject({ accessToken: "ghu_token", refreshToken: "ghr_refresh" });
+    expect(token.expiresAt).toBe(new Date(1_000_000 + 5000 + 28_800_000).toISOString());
+  });
+
+  it("renews an expiring token without a client secret", async () => {
+    const { flow, requests } = fakeGitHub([
+      { access_token: "ghu_new", token_type: "bearer", expires_in: 28_800, refresh_token: "ghr_new" }
+    ]);
+
+    await expect(flow.refresh("ghr_old")).resolves.toMatchObject({ accessToken: "ghu_new", refreshToken: "ghr_new" });
+    expect(requests).toEqual([{
+      url: GITHUB_ACCESS_TOKEN_URL,
+      body: { client_id: "client-123", grant_type: "refresh_token", refresh_token: "ghr_old" }
+    }]);
+  });
+
+  it("keeps the old refresh token if GitHub sends none, and explains a dead one", async () => {
+    const kept = fakeGitHub([{ access_token: "ghu_new", expires_in: 28_800 }]);
+    await expect(kept.flow.refresh("ghr_old")).resolves.toMatchObject({ refreshToken: "ghr_old" });
+
+    const dead = fakeGitHub([{ error: "bad_refresh_token", error_description: "The refresh token passed is incorrect or expired." }]);
+    await expect(dead.flow.refresh("ghr_old")).rejects.toThrow("can no longer be renewed");
+  });
+
   it("stops when cancelled", async () => {
     const { flow } = fakeGitHub([]);
     const controller = new AbortController();

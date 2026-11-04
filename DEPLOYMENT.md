@@ -42,10 +42,12 @@ OAuth app's client ID is built into the installer, and a client ID is public.
 
 1. On GitHub, open **Settings → Developer settings → OAuth Apps → New OAuth
    App**. Use any name (for example "MCP Connector"), and the repository URL
-   as both the homepage URL and the callback URL; the device flow does not use
-   the callback URL, but the form requires one.
-2. Register the app, then tick **Enable Device Flow** on its settings page and
-   save. Without it, GitHub refuses the sign-in and the app says so.
+   as both the homepage URL and the redirect (callback) URL; the device flow
+   does not use it, but the form requires one.
+2. Tick **Enable Device Flow** on the form (or later on the app's settings
+   page). Without it, GitHub refuses the sign-in and the app says so.
+   **Expire user access tokens** can be on or off; see below. Then register
+   the app.
 3. Copy the **Client ID**. Do not generate a client secret: the app does not use one.
 4. Set the client ID while building the installer:
 
@@ -58,9 +60,14 @@ OAuth app's client ID is built into the installer, and a client ID is public.
    `MCP_GITHUB_CLIENT_ID` under **Settings → Secrets and variables → Actions →
    Variables**. It is not a secret, so it does not need to be stored as one.
 
-Use an OAuth app, not a GitHub App: OAuth app tokens do not expire, so the app
-has nothing to refresh. `MCP_GITHUB_CLIENT_ID` set when the app starts
-overrides the built-in value, which is useful in `npm run dev`.
+With **Expire user access tokens** on, which GitHub suggests by default, a
+token lasts eight hours and the app renews it with its refresh token. Tokens
+from the device flow renew without a client secret. With it off, tokens do not
+expire. **Disconnect** only removes the token from this computer; to revoke
+it, open **Settings → Applications → Authorized OAuth Apps** on GitHub.
+
+`MCP_GITHUB_CLIENT_ID` set when the app starts overrides the built-in value,
+which is useful in `npm run dev`.
 
 ### Notion
 

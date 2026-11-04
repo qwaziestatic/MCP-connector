@@ -35,6 +35,7 @@ const providerNames: Readonly<Record<OAuthProviderConfig["provider"], string>> =
 // Plain-language explanations for the errors users are most likely to hit.
 const providerErrorHints: Readonly<Record<string, string>> = {
   bad_verification_code: "The sign-in code expired or was already used. Connect again.",
+  bad_refresh_token: "The saved sign-in can no longer be renewed. Connect again.",
   incorrect_client_credentials: "The app's OAuth client ID or secret is wrong.",
   redirect_uri_mismatch: "The sign-in return address does not match the one registered for this app.",
   invalid_grant: "The authorization is no longer valid. Connect again.",

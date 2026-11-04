@@ -3,6 +3,9 @@ import type { StoredCredential } from "./credential-vault";
 
 const providerNames = { github: "GitHub", notion: "Notion" } as const;
 
+/** Renew a little early, so a token cannot expire in the middle of a request. */
+const RENEW_BEFORE_EXPIRY_MS = 60_000;
+
 export class VaultTokenProvider implements ConnectorTokenProvider {
   public constructor(
     private readonly vault: {
@@ -24,7 +27,7 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
     }
     if (
       credential.expiresAt === null ||
-      Date.parse(credential.expiresAt) > Date.now()
+      Date.parse(credential.expiresAt) - RENEW_BEFORE_EXPIRY_MS > Date.now()
     ) {
       return credential.accessToken;
     }

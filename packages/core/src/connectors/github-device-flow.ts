@@ -141,16 +141,39 @@ export class GitHubDeviceFlow {
       if (!json.ok || !token.success) {
         throw new Error(`GitHub returned an unexpected sign-in response (${json.status}).`);
       }
-      return {
-        accessToken: token.data.access_token,
-        refreshToken: token.data.refresh_token ?? null,
-        expiresAt: token.data.expires_in === undefined || token.data.expires_in === null
-          ? null
-          : new Date(this.now() + token.data.expires_in * 1000).toISOString(),
-        tokenType: token.data.token_type,
-        scope: token.data.scope ?? null
-      };
+      return this.toTokenSet(token.data, null);
     }
+  }
+
+  /**
+   * Renews a token that expires, for OAuth apps with "Expire user access
+   * tokens" turned on. Tokens from the device flow renew without a client secret.
+   */
+  async refresh(refreshToken: string): Promise<OAuthTokenSet> {
+    const json = await this.post(GITHUB_ACCESS_TOKEN_URL, {
+      client_id: this.clientId,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    });
+    const error = errorSchema.safeParse(json.body);
+    if (error.success) throw describeError(error.data.error, error.data.error_description);
+    const token = tokenSchema.safeParse(json.body);
+    if (!json.ok || !token.success) {
+      throw new Error(`GitHub returned an unexpected response while renewing the sign-in (${json.status}).`);
+    }
+    return this.toTokenSet(token.data, refreshToken);
+  }
+
+  private toTokenSet(token: z.infer<typeof tokenSchema>, previousRefreshToken: string | null): OAuthTokenSet {
+    return {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? previousRefreshToken,
+      expiresAt: token.expires_in === undefined || token.expires_in === null
+        ? null
+        : new Date(this.now() + token.expires_in * 1000).toISOString(),
+      tokenType: token.token_type,
+      scope: token.scope ?? null
+    };
   }
 
   private async post(
