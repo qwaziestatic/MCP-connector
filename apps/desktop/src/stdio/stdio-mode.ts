@@ -82,7 +82,8 @@ async function readConnection(profile: RelayProfile): Promise<{ url: string | nu
     : null;
   if (url === null) return { url, bearerToken: "" };
   try {
-    const vault = new CredentialVault(join(profile.appDataPath, "credentials.json"));
+    // Read-only: the relay must never write the app's vault file.
+    const vault = new CredentialVault(join(profile.appDataPath, "credentials.json"), { readOnly: true });
     return { url, bearerToken: (await vault.getSecret("mcp-http-token")) ?? "" };
   } catch (error) {
     process.stderr.write(`Could not read the MCP token: ${error instanceof Error ? error.message : String(error)}\n`);
