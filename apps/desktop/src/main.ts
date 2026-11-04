@@ -506,7 +506,16 @@ if (isStdioMode()) {
       process.stderr.write(`MCP Connector stdio mode failed: ${error instanceof Error ? error.message : String(error)}\n`);
       app.exit(1);
     });
+} else if (!app.requestSingleInstanceLock()) {
+  // Another copy already has this data folder open. Two copies would share
+  // the database and listeners, and the one that quits first would remove
+  // the running server's address. The other copy shows its window instead.
+  app.quit();
 } else {
+  app.on("second-instance", () => {
+    if (app.isReady()) showMainWindow();
+  });
+
   void app.whenReady().then(startDesktopApp);
 
   app.on("window-all-closed", () => {

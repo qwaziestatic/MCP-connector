@@ -108,6 +108,26 @@ describe("AgentConnectionManager", () => {
     await expect(readFile(endpointFilePath, "utf8")).rejects.toThrow();
   });
 
+  it("leaves another copy's address in place when it closes", async () => {
+    const { manager, endpointFilePath, directory, secrets } = await setup();
+    const other = await setup({ directory, secrets });
+    const running = await manager.startMcp();
+
+    // A second copy that never started its own server quits.
+    await other.manager.closeAll();
+    expect(JSON.parse(await readFile(endpointFilePath, "utf8"))).toEqual({ url: running.url });
+
+    // A second copy that started a server on another port and quit after the
+    // first copy rewrote the file must not remove the first copy's address.
+    const second = await other.manager.startMcp();
+    await manager.stopMcp();
+    await manager.startMcp();
+    const current = await manager.getMcpStatus();
+    await other.manager.closeAll();
+    expect(second.url).not.toBe(current.url);
+    expect(JSON.parse(await readFile(endpointFilePath, "utf8"))).toEqual({ url: current.url });
+  });
+
   it("rejects the old token after a new one is generated", async () => {
     const { manager } = await setup();
     const before = await manager.startMcp();

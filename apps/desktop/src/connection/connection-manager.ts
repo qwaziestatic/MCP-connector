@@ -3,7 +3,7 @@
 // port and a token saved in the vault, so agents and the VS Code extension are
 // set up once and keep working after the app restarts.
 import { randomBytes } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   startMcpHttpServer,
@@ -180,8 +180,22 @@ export class AgentConnectionManager {
   private async closeMcpServer(): Promise<void> {
     const server = this.mcpServer;
     this.mcpServer = null;
-    await rm(this.options.endpointFilePath, { force: true });
+    if (server !== null) {
+      await this.removeEndpointFileIfOurs(server.url);
+    }
     await server?.close();
+  }
+
+  // Only remove the address this copy wrote, so a copy that never started a
+  // server, or started a different one, cannot hide another copy's server.
+  private async removeEndpointFileIfOurs(url: string): Promise<void> {
+    try {
+      const endpoint = JSON.parse(await readFile(this.options.endpointFilePath, "utf8")) as Partial<McpEndpointFile>;
+      if (endpoint.url !== url) return;
+    } catch {
+      return;
+    }
+    await rm(this.options.endpointFilePath, { force: true });
   }
 
   private async token(name: LocalSecretName): Promise<string> {
