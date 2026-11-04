@@ -159,6 +159,13 @@ const checks = [
       throw new Error("Node.js globals are exposed to the renderer.");
     }
   }],
+  ["Copy buttons may write the clipboard; reading it stays denied", async (page) => {
+    // Only asks for the permissions, so it never touches the real clipboard.
+    const query = (name) => page.evaluate(`navigator.permissions.query({ name: "${name}" }).then((p) => p.state)`);
+    const [write, read] = [await query("clipboard-write"), await query("clipboard-read")];
+    if (write !== "granted") throw new Error(`clipboard-write is "${write}", so every Copy button fails.`);
+    if (read === "granted") throw new Error("The renderer can read the clipboard.");
+  }],
   ["database loads pending approvals and audit log", async (page) => {
     await page.evaluate("window.desktopApi.workflow.listPending()");
     await page.evaluate("window.desktopApi.workflow.listAuditRecords()");
