@@ -7,6 +7,14 @@ export interface AgentConfigs {
   readonly claudeCode: string;
   /** An entry for Cursor's mcp.json. */
   readonly cursor: string;
+  /** An entry for VS Code's mcp.json, used by GitHub Copilot's agent mode. */
+  readonly vsCode: string;
+  /** A table for Codex's config.toml. */
+  readonly codex: string;
+  /** A `gemini mcp add` command for Gemini CLI. */
+  readonly geminiCli: string;
+  /** An entry for Windsurf's mcp_config.json. */
+  readonly windsurf: string;
   /** A `claude mcp add` command that runs the app in stdio mode. Packaged builds only. */
   readonly claudeCodeStdio: string | null;
   /** A stdio entry in the common mcpServers JSON format. Packaged builds only. */
@@ -38,6 +46,24 @@ export function buildAgentConfigs(input: AgentConfigInput): AgentConfigs {
     cursor: JSON.stringify({
       mcpServers: {
         [MCP_SERVER_NAME]: { url: input.url, headers: { Authorization: authorization } }
+      }
+    }, null, 2),
+    vsCode: JSON.stringify({
+      servers: {
+        [MCP_SERVER_NAME]: { type: "http", url: input.url, headers: { Authorization: authorization } }
+      }
+    }, null, 2),
+    // JSON strings are valid TOML basic strings for these values.
+    codex: [
+      `[mcp_servers.${MCP_SERVER_NAME}]`,
+      `url = ${JSON.stringify(input.url)}`,
+      `http_headers = { "Authorization" = ${JSON.stringify(authorization)} }`
+    ].join("\n"),
+    geminiCli: `gemini mcp add --scope user --transport http --header "Authorization: ${authorization}" `
+      + `${MCP_SERVER_NAME} ${input.url}`,
+    windsurf: JSON.stringify({
+      mcpServers: {
+        [MCP_SERVER_NAME]: { serverUrl: input.url, headers: { Authorization: authorization } }
       }
     }, null, 2),
     claudeCodeStdio: stdio === undefined
