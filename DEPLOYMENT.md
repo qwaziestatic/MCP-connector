@@ -93,6 +93,10 @@ happen in its window. If the app or its MCP server isn't running, every request
 gets an error that says so. **Copy stdio setup for Claude Code** and **Copy stdio
 JSON** in the app produce the setup; they are only offered in the installed app.
 
+On Windows, Electron prints one blank line to stdout before the app's code runs,
+so the app cannot prevent it. MCP SDK clients skip it. A client that rejects
+blank lines should use the HTTP setup instead.
+
 ## Logs and startup errors
 
 The app writes a log to its logs folder (`main.log`, plus `main.old.log` once
