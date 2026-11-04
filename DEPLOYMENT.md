@@ -97,6 +97,13 @@ On Windows, Electron prints one blank line to stdout before the app's code runs,
 so the app cannot prevent it. MCP SDK clients skip it. A client that rejects
 blank lines should use the HTTP setup instead.
 
+On Windows, the relay uses its own `stdio-relay` subfolder of the app's data
+folder, with a copy of the vault's encryption key. Chromium rewrites `Local
+State` when it exits, so a relay sharing the app's profile could replace the key
+and lock the app out of its vault. On a new profile the key is saved about ten
+seconds after the first launch; until then the relay reports that the server
+isn't running.
+
 ## Logs and startup errors
 
 The app writes a log to its logs folder (`main.log`, plus `main.old.log` once
