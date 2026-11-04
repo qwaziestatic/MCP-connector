@@ -38,15 +38,14 @@ const desktopApi: DesktopApi = {
     executeApproved: (previewId) => ipcRenderer.invoke("workflow:execute-approved", previewId),
     listAuditRecords: () => ipcRenderer.invoke("workflow:list-audit-records")
   },
-  credentials: {
-    getStatus: () => ipcRenderer.invoke("credentials:get-status"),
-    connect: (provider) => ipcRenderer.invoke("credentials:connect", provider),
-    startGitHub: () => ipcRenderer.invoke("credentials:github-start"),
-    openGitHub: () => ipcRenderer.invoke("credentials:github-open") as Promise<void>,
-    waitForGitHub: () => ipcRenderer.invoke("credentials:github-wait") as Promise<void>,
-    cancelGitHub: () => ipcRenderer.invoke("credentials:github-cancel") as Promise<void>,
-    cancelNotion: () => ipcRenderer.invoke("credentials:notion-cancel") as Promise<void>,
-    disconnect: (provider) => ipcRenderer.invoke("credentials:disconnect", provider)
+  connectors: {
+    list: () => ipcRenderer.invoke("connectors:list"),
+    startSignIn: (id) => ipcRenderer.invoke("connectors:start-sign-in", id),
+    openSignInPage: (id) => ipcRenderer.invoke("connectors:open-sign-in-page", id) as Promise<void>,
+    finishSignIn: (id) => ipcRenderer.invoke("connectors:finish-sign-in", id) as Promise<void>,
+    cancelSignIn: (id) => ipcRenderer.invoke("connectors:cancel-sign-in", id) as Promise<void>,
+    disconnect: (id) => ipcRenderer.invoke("connectors:disconnect", id) as Promise<void>,
+    setSetting: (id, key, value) => ipcRenderer.invoke("connectors:set-setting", id, key, value)
   },
   mcp: {
     getStatus: () => ipcRenderer.invoke("mcp:get-status"),

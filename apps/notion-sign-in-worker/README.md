@@ -72,6 +72,10 @@ Notion account. Run the commands in PowerShell from this folder
    $env:MCP_NOTION_SIGN_IN_URL = "https://mcp-connector-notion-sign-in.<your-subdomain>.workers.dev"
    ```
 
+7. **In MCP Connector,** click **Connect** next to Notion and give it access to
+   the database new pages should go to. Then paste that database's link in
+   **Database for new pages**, under Notion.
+
 If the secret ever leaks, generate a new one in Notion's integration settings
 and run step 4 again. Installed copies of the app keep working, because they
 never had the secret.

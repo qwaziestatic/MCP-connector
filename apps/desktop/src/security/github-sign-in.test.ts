@@ -28,6 +28,7 @@ function setUp(overrides: Partial<GitHubDeviceFlowLike> = {}, uri = authorizatio
     ...overrides
   };
   const signIn = new GitHubSignIn(
+    "github",
     () => flow,
     { save: async (credential) => { saved.push(credential); } },
     async (url) => { opened.push(url); }
@@ -40,23 +41,24 @@ describe("GitHubSignIn", () => {
     const { signIn, saved, opened } = setUp();
 
     await expect(signIn.start()).resolves.toEqual({
+      kind: "code",
       userCode: "WDJB-MJHT",
       verificationUri: "https://github.com/login/device",
       expiresAt: authorization.expiresAt
     });
-    await signIn.openVerificationPage();
-    await signIn.waitForToken();
+    await signIn.openPage();
+    await signIn.finish();
 
     expect(opened).toEqual(["https://github.com/login/device"]);
     expect(saved).toEqual([{ provider: "github", ...token }]);
-    await expect(signIn.waitForToken()).rejects.toThrow("has not started");
+    await expect(signIn.finish()).rejects.toThrow("has not started");
   });
 
   it("opens only GitHub's own address", async () => {
     const { signIn, opened } = setUp({}, "https://evil.example/login/device");
     await signIn.start();
 
-    await expect(signIn.openVerificationPage()).rejects.toThrow("unexpected sign-in address");
+    await expect(signIn.openPage()).rejects.toThrow("unexpected sign-in address");
     expect(opened).toEqual([]);
   });
 
@@ -67,7 +69,7 @@ describe("GitHubSignIn", () => {
       }));
     const { signIn, saved } = setUp({ waitForToken });
     await signIn.start();
-    const waiting = signIn.waitForToken();
+    const waiting = signIn.finish();
     signIn.cancel();
 
     await expect(waiting).rejects.toThrow("cancelled");
@@ -83,7 +85,7 @@ describe("GitHubSignIn", () => {
       }
     });
     await signIn.start();
-    void signIn.waitForToken();
+    void signIn.finish();
     await signIn.start();
 
     expect(signals[0]?.aborted).toBe(true);

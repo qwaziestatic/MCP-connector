@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AuditRecord,
   WorkflowPreview,
@@ -6,7 +6,7 @@ import type {
   WorkspaceSnapshot
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
-import type { GitHubSignInCode } from "../security/github-sign-in";
+import { ConnectionsCard } from "./connections-card";
 import "./styles.css";
 
 const entryLabels: Readonly<Record<WorkspaceSnapshot["entries"][number]["type"], string>> = {
@@ -19,16 +19,6 @@ function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(value));
-}
-
-/** The main process's message, without Electron's "Error invoking remote method" prefix. */
-function ipcErrorMessage(cause: unknown, fallback: string): string {
-  if (!(cause instanceof Error)) return fallback;
-  return cause.message.replace(/^Error invoking remote method '[^']+': (?:[A-Za-z]*Error: )?/, "");
 }
 
 function formatDate(value: string): string {
@@ -61,10 +51,6 @@ export function App(): JSX.Element {
   const [auditSearch, setAuditSearch] = useState("");
   const [auditStatus, setAuditStatus] = useState<AuditRecord["status"] | "ALL">("ALL");
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<Readonly<Record<"github" | "notion", boolean>>>({
-    github: false,
-    notion: false
-  });
   const [mcpStatus, setMcpStatus] = useState<{
     readonly enabled: boolean;
     readonly url: string | null;
@@ -97,12 +83,7 @@ export function App(): JSX.Element {
     message: null
   });
   const [copied, setCopied] = useState<string | null>(null);
-  // Shown while the user enters the code on github.com.
-  const [githubCode, setGitHubCode] = useState<GitHubSignInCode | null>(null);
-  const githubCancelled = useRef(false);
-  // Shown while the user allows access in the browser.
-  const [waitingForNotion, setWaitingForNotion] = useState(false);
-  const notionCancelled = useRef(false);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,7 +106,6 @@ export function App(): JSX.Element {
     void Promise.all([
       refreshAudit(),
       window.desktopApi.workflow.listPending().then(setPendingPreviews),
-      window.desktopApi.credentials.getStatus().then(setConnectionStatus),
       window.desktopApi.mcp.getStatus().then(setMcpStatus),
       window.desktopApi.vscode.getStatus().then(setVscodeStatus),
       window.desktopApi.updater.getStatus().then(setUpdaterStatus),
@@ -161,86 +141,6 @@ export function App(): JSX.Element {
     }, 1000);
     return () => window.clearInterval(poll);
   }, [updaterStatus.phase]);
-
-  const connectGitHub = async (): Promise<void> => {
-    setError(null);
-    setBusy(true);
-    githubCancelled.current = false;
-    try {
-      setGitHubCode(await window.desktopApi.credentials.startGitHub());
-    } catch (cause: unknown) {
-      setError(ipcErrorMessage(cause, "Unable to start GitHub sign-in."));
-      return;
-    } finally {
-      setBusy(false);
-    }
-    try {
-      await window.desktopApi.credentials.waitForGitHub();
-      setConnectionStatus(await window.desktopApi.credentials.getStatus());
-    } catch (cause: unknown) {
-      if (!githubCancelled.current) setError(ipcErrorMessage(cause, "GitHub sign-in failed."));
-    } finally {
-      setGitHubCode(null);
-    }
-  };
-
-  const openGitHub = async (): Promise<void> => {
-    if (githubCode === null) return;
-    try {
-      await copyValue("github-code", githubCode.userCode);
-    } catch {
-      // The code is on screen if the clipboard is unavailable.
-    }
-    try {
-      await window.desktopApi.credentials.openGitHub();
-    } catch (cause: unknown) {
-      setError(ipcErrorMessage(cause, "Unable to open GitHub."));
-    }
-  };
-
-  const cancelGitHub = async (): Promise<void> => {
-    githubCancelled.current = true;
-    await window.desktopApi.credentials.cancelGitHub();
-  };
-
-  const connectNotion = async (): Promise<void> => {
-    setError(null);
-    notionCancelled.current = false;
-    setWaitingForNotion(true);
-    try {
-      await window.desktopApi.credentials.connect("notion");
-      setConnectionStatus(await window.desktopApi.credentials.getStatus());
-    } catch (cause: unknown) {
-      if (!notionCancelled.current) setError(ipcErrorMessage(cause, "Notion sign-in failed."));
-    } finally {
-      setWaitingForNotion(false);
-    }
-  };
-
-  const cancelNotion = async (): Promise<void> => {
-    notionCancelled.current = true;
-    await window.desktopApi.credentials.cancelNotion();
-  };
-
-  const updateConnection = async (
-    provider: "github" | "notion",
-    connected: boolean
-  ): Promise<void> => {
-    if (!connected) {
-      await (provider === "github" ? connectGitHub() : connectNotion());
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    try {
-      await window.desktopApi.credentials.disconnect(provider);
-      setConnectionStatus(await window.desktopApi.credentials.getStatus());
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : `Unable to update ${provider} connection.`);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const chooseWorkspace = async (): Promise<void> => {
     setError(null);
@@ -534,70 +434,11 @@ export function App(): JSX.Element {
         ))}
       </section>
 
-      <section className="card integrations-card">
-        <div className="card-heading">
-          <div>
-            <p className="eyebrow">CLOUD CONNECTORS</p>
-            <h2>Secure provider connections</h2>
-          </div>
-          <span className="muted">Tokens remain in Windows-protected storage.</span>
-        </div>
-        <div className="integration-list">
-          {(["github", "notion"] as const).map((provider) => {
-            const waitingForGitHub = provider === "github" && githubCode !== null;
-            const waiting = waitingForGitHub || (provider === "notion" && waitingForNotion);
-            return (
-              <div key={provider}>
-                <div className="integration-row">
-                  <div>
-                    <strong>{provider === "github" ? "GitHub" : "Notion"}</strong>
-                    <p className="muted">
-                      {waitingForGitHub
-                        ? "Waiting for you to approve on github.com"
-                        : waiting
-                          ? "Waiting for you to allow access in your browser"
-                          : connectionStatus[provider] ? "Connected" : "Not connected"}
-                    </p>
-                  </div>
-                  <button
-                    className={`button ${connectionStatus[provider] ? "danger" : "secondary"}`}
-                    onClick={() => void updateConnection(provider, connectionStatus[provider])}
-                    disabled={busy || waiting}
-                  >
-                    {connectionStatus[provider] ? "Disconnect" : "Connect"}
-                  </button>
-                </div>
-                {waitingForGitHub && (
-                  <div className="device-code" role="status">
-                    <div>
-                      <p>Enter this code on GitHub to connect your account:</p>
-                      <code className="device-code-value">{githubCode.userCode}</code>
-                      <p className="muted">The code works until {formatTime(githubCode.expiresAt)}.</p>
-                    </div>
-                    <div className="actions">
-                      <button className="button primary" onClick={() => void openGitHub()}>
-                        {copied === "github-code" ? "Code copied" : "Copy code and open GitHub"}
-                      </button>
-                      <button className="button ghost" onClick={() => void cancelGitHub()}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-                {provider === "notion" && waitingForNotion && (
-                  <div className="device-code" role="status">
-                    <div>
-                      <p>Finish in your browser: choose the pages MCP Connector may use, then allow access.</p>
-                      <p className="muted">MCP Connector notices as soon as you allow access.</p>
-                    </div>
-                    <div className="actions">
-                      <button className="button ghost" onClick={() => void cancelNotion()}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <ConnectionsCard
+        onError={setError}
+        copyText={async (label, value) => copyValue(label, value)}
+        copied={copied}
+      />
 
       <section className="card integrations-card">
         <div className="card-heading">

@@ -2,9 +2,11 @@ import { app, safeStorage } from "electron";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { isConnectorId } from "@mcp-connector/core";
 
 export interface StoredCredential {
-  readonly provider: "github" | "notion";
+  /** The connector's id, for example "github". */
+  readonly provider: string;
   readonly accessToken: string;
   readonly refreshToken: string | null;
   readonly expiresAt: string | null;
@@ -42,8 +44,13 @@ export class CredentialVault implements LocalSecretStore {
     }
   }
 
+  private assertConnectorId(provider: string): void {
+    if (!isConnectorId(provider)) throw new Error(`"${provider}" is not a connector id.`);
+  }
+
   async save(credential: StoredCredential): Promise<void> {
     this.assertWritable();
+    this.assertConnectorId(credential.provider);
     if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
@@ -57,6 +64,7 @@ export class CredentialVault implements LocalSecretStore {
   }
 
   async get(provider: StoredCredential["provider"]): Promise<StoredCredential | null> {
+    this.assertConnectorId(provider);
     if (!(await safeStorage.isAsyncEncryptionAvailable())) {
       throw new Error("Windows credential encryption is unavailable.");
     }
@@ -79,6 +87,7 @@ export class CredentialVault implements LocalSecretStore {
 
   async remove(provider: StoredCredential["provider"]): Promise<void> {
     this.assertWritable();
+    this.assertConnectorId(provider);
     await this.enqueueWrite(async () => {
       const contents = await this.readFile();
       delete contents[provider];
@@ -87,6 +96,7 @@ export class CredentialVault implements LocalSecretStore {
   }
 
   async has(provider: StoredCredential["provider"]): Promise<boolean> {
+    this.assertConnectorId(provider);
     const contents = await this.readFile();
     return contents[provider] !== undefined;
   }

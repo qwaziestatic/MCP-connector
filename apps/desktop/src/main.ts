@@ -3,28 +3,23 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
 import {
+  createBuiltInConnectors,
   createNotionPagePreview,
-  executeNotionPagePreview,
+  executeApprovedPreview,
   FilesystemService,
-  GitHubDeviceFlow,
-  NotionSignInClient,
-  OfficialNotionConnector,
-  OctokitGitHubConnector,
   PrismaAuditRepository,
   WorkflowService
 } from "@mcp-connector/core";
 import { CredentialVault } from "./security/credential-vault";
-import { OAuthCallbackServer } from "./security/oauth-callback-server";
-import { GitHubSignIn } from "./security/github-sign-in";
-import { NotionSignIn } from "./security/notion-sign-in";
-import { VaultTokenProvider } from "./security/vault-token-provider";
+import { ConnectorHub } from "./connection/connector-hub";
+import { ConnectorSettings } from "./connection/connector-settings";
+import { createSignInFlow, createTokenRefresh } from "./connection/sign-in-kinds";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
 import { buildAgentConfigs } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
-import { readGitHubClientId, readNotionSignInUrl } from "./settings/sign-in-config";
 import { isStdioMode, runStdioMode, STDIO_FLAG, useRelayProfile } from "./stdio/stdio-mode";
 import { createFileLogger } from "./logging/file-logger";
 import { describeStartupError } from "./logging/startup-error";
@@ -72,26 +67,10 @@ function configureElectronSecurity(): void {
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => isAllowedPermission(permission));
 }
 
-/** What the GitHub tools need: the user's profile and their repositories. */
-const GITHUB_SCOPES = ["read:user", "repo"];
-
-/** Notion's client secret lives in the sign-in service, never in the app. */
-function createNotionSignInClient(): NotionSignInClient {
-  return new NotionSignInClient(readNotionSignInUrl());
-}
-
-function getNotionDatabaseId(): string | undefined {
-  const databaseId = process.env.MCP_NOTION_DATABASE_ID?.trim();
-  return databaseId === undefined || databaseId.length === 0 ? undefined : databaseId;
-}
-
 function registerIpcHandlers(
   workflowService: WorkflowService,
   auditRepository: PrismaAuditRepository,
-  credentialVault: CredentialVault,
-  githubSignIn: GitHubSignIn,
-  notionSignIn: NotionSignIn,
-  getNotionConnector: () => OfficialNotionConnector,
+  connectorHub: ConnectorHub,
   connectionManager: AgentConnectionManager,
   settings: AppSettingsStore
 ): void {
@@ -205,14 +184,10 @@ function registerIpcHandlers(
       throw new Error("Preview ID must be a string.");
     }
 
-    // Resolve the connector before claiming the approval: execution failures
-    // are final, so a missing Notion setting must not use up the approval.
-    const notion = getNotionConnector();
-    // The same executor as the MCP tool: it sends the stored blocks unchanged.
-    return workflowService.executeApproved(
-      previewId,
-      (preview) => executeNotionPagePreview(preview, notion)
-    );
+    // The same path as the agents' tools: the connector that made the preview
+    // checks its sign-in and settings first, so a missing one does not use up
+    // the approval, then sends exactly what was approved.
+    return executeApprovedPreview(workflowService, connectorHub.connectors, previewId);
   });
 
   ipcMain.handle("notion:create-page-preview", async (_event, title: unknown, markdown: unknown) => {
@@ -222,33 +197,16 @@ function registerIpcHandlers(
     return createNotionPagePreview(workflowService, { title, markdown }, "ui");
   });
 
-  ipcMain.handle("credentials:get-status", async () => ({
-    github: await credentialVault.has("github"),
-    notion: await credentialVault.has("notion")
-  }));
-
-  // GitHub uses the device flow: the window shows a code, the user enters it
-  // on github.com, and no client secret is needed.
-  ipcMain.handle("credentials:github-start", () => githubSignIn.start());
-  ipcMain.handle("credentials:github-open", () => githubSignIn.openVerificationPage());
-  ipcMain.handle("credentials:github-wait", () => githubSignIn.waitForToken());
-  ipcMain.handle("credentials:github-cancel", () => githubSignIn.cancel());
-
-  // Notion signs in through the browser and the Notion sign-in service.
-  ipcMain.handle("credentials:connect", async (_event, provider: unknown) => {
-    if (provider !== "notion") {
-      throw new Error("Unsupported OAuth provider.");
-    }
-    await notionSignIn.connect();
-  });
-  ipcMain.handle("credentials:notion-cancel", () => notionSignIn.cancel());
-
-  ipcMain.handle("credentials:disconnect", async (_event, provider: unknown) => {
-    if (provider !== "github" && provider !== "notion") {
-      throw new Error("Unsupported OAuth provider.");
-    }
-    await credentialVault.remove(provider);
-  });
+  // Every connector signs in, out, and is set up through the same requests;
+  // the hub checks the connector id the window sends.
+  ipcMain.handle("connectors:list", () => connectorHub.list());
+  ipcMain.handle("connectors:start-sign-in", (_event, id: unknown) => connectorHub.startSignIn(id));
+  ipcMain.handle("connectors:open-sign-in-page", (_event, id: unknown) => connectorHub.openSignInPage(id));
+  ipcMain.handle("connectors:finish-sign-in", (_event, id: unknown) => connectorHub.finishSignIn(id));
+  ipcMain.handle("connectors:cancel-sign-in", (_event, id: unknown) => connectorHub.cancelSignIn(id));
+  ipcMain.handle("connectors:disconnect", (_event, id: unknown) => connectorHub.disconnect(id));
+  ipcMain.handle("connectors:set-setting", (_event, id: unknown, key: unknown, value: unknown) =>
+    connectorHub.setSetting(id, key, value));
 
   ipcMain.handle("mcp:get-status", () => connectionManager.getMcpStatus());
   ipcMain.handle("mcp:start", () => connectionManager.startMcp());
@@ -360,17 +318,6 @@ async function startDesktopApp(): Promise<void> {
     const auditRepository = new PrismaAuditRepository(prisma);
     const workflowService = new WorkflowService(auditRepository, auditRepository);
     const credentialVault = new CredentialVault();
-    const notionSignIn = new NotionSignIn(
-      createNotionSignInClient,
-      () => new OAuthCallbackServer(),
-      credentialVault,
-      (url) => shell.openExternal(url)
-    );
-    const githubSignIn = new GitHubSignIn(
-      () => new GitHubDeviceFlow(readGitHubClientId(), GITHUB_SCOPES),
-      credentialVault,
-      (url) => shell.openExternal(url)
-    );
     const settings = new AppSettingsStore(join(app.getPath("userData"), "settings.json"));
     // Restore the workspace chosen in an earlier session, so MCP tools work
     // after a restart without the user choosing it again.
@@ -378,33 +325,19 @@ async function startDesktopApp(): Promise<void> {
     if (savedWorkspace !== undefined) {
       filesystemService.setAllowedWorkspaceRoot(savedWorkspace);
     }
-    const getNotionConnector = (): OfficialNotionConnector => {
-      const notionDatabaseId = getNotionDatabaseId();
-      if (notionDatabaseId === undefined) {
-        throw new Error("MCP_NOTION_DATABASE_ID is not configured.");
-      }
-      return new OfficialNotionConnector(
-        new VaultTokenProvider(
-          credentialVault,
-          "notion",
-          (refreshToken) => createNotionSignInClient().refresh(refreshToken)
-        ),
-        { databaseId: notionDatabaseId }
-      );
-    };
-    // Notion is optional: without a database ID the MCP server still starts and
-    // its Notion tools report that the connector is not configured.
+    // Every service the app offers. Its tools are always listed for agents;
+    // they explain what to do when a service is not connected or set up.
+    const connectorHub = new ConnectorHub({
+      definitions: createBuiltInConnectors(),
+      vault: credentialVault,
+      settings: await ConnectorSettings.load(settings),
+      createSignIn: (definition) => createSignInFlow(definition, credentialVault, (url) => shell.openExternal(url)),
+      createRefresh: createTokenRefresh
+    });
     const getMcpDependencies = (): McpConnectorDependencies => ({
       filesystem: filesystemService,
       workflow: workflowService,
-      // Tokens expire only if the OAuth app has "Expire user access tokens" on;
-      // device-flow tokens then renew without a client secret.
-      github: new OctokitGitHubConnector(new VaultTokenProvider(
-        credentialVault,
-        "github",
-        (refreshToken) => new GitHubDeviceFlow(readGitHubClientId(), GITHUB_SCOPES).refresh(refreshToken)
-      )),
-      ...(getNotionDatabaseId() === undefined ? {} : { notion: getNotionConnector() })
+      connectors: connectorHub.connectors
     });
     const connectionManager = new AgentConnectionManager({
       settings,
@@ -423,10 +356,7 @@ async function startDesktopApp(): Promise<void> {
     registerIpcHandlers(
       workflowService,
       auditRepository,
-      credentialVault,
-      githubSignIn,
-      notionSignIn,
-      getNotionConnector,
+      connectorHub,
       connectionManager,
       settings
     );

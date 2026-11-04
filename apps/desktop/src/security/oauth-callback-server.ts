@@ -5,9 +5,28 @@ export interface OAuthCallbackResult {
   readonly state: string;
 }
 
+type Callback = { readonly result: OAuthCallbackResult } | { readonly error: Error };
+
+function readCallback(url: URL): Callback {
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+  if (error === "access_denied") return { error: new Error("Sign-in was declined in the browser.") };
+  if (error !== null) return { error: new Error(`OAuth provider rejected authorization: ${error}`) };
+  if (code === null || state === null) return { error: new Error("OAuth callback did not include code and state.") };
+  return { result: { code, state } };
+}
+
+/**
+ * Listens on 127.0.0.1 for the browser's return from a sign-in. The first
+ * return is kept until waitForCallback() asks for it, so a fast browser
+ * cannot arrive before the app starts waiting.
+ */
 export class OAuthCallbackServer {
   private server: Server | null = null;
   private callbackUrl: string | null = null;
+  private received: Callback | null = null;
+  private waiter: ((callback: Callback) => void) | null = null;
 
   async start(): Promise<string> {
     if (this.server !== null && this.callbackUrl !== null) {
@@ -23,6 +42,10 @@ export class OAuthCallbackServer {
 
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end("<!doctype html><title>MCP Connector</title><p>Authorization received. You can close this window.</p>");
+      if (this.received !== null) return;
+      const callback = readCallback(requestUrl);
+      if (this.waiter !== null) this.waiter(callback);
+      else this.received = callback;
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -57,8 +80,16 @@ export class OAuthCallbackServer {
     if (signal?.aborted === true) {
       throw new Error("Sign-in was cancelled.");
     }
+    const settle = (callback: Callback): OAuthCallbackResult => {
+      if ("error" in callback) throw callback.error;
+      return callback.result;
+    };
+    if (this.received !== null) {
+      const received = this.received;
+      this.received = null;
+      return settle(received);
+    }
 
-    const server = this.server;
     return new Promise<OAuthCallbackResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
@@ -69,32 +100,19 @@ export class OAuthCallbackServer {
         reject(new Error("Sign-in was cancelled."));
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-
-      const onRequest = (request: import("node:http").IncomingMessage): void => {
-        const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
-        if (requestUrl.pathname !== "/oauth/callback") return;
-        const code = requestUrl.searchParams.get("code");
-        const state = requestUrl.searchParams.get("state");
-        const error = requestUrl.searchParams.get("error");
-        cleanup();
-        if (error === "access_denied") {
-          reject(new Error("Sign-in was declined in the browser."));
-        } else if (error !== null) {
-          reject(new Error(`OAuth provider rejected authorization: ${error}`));
-        } else if (code === null || state === null) {
-          reject(new Error("OAuth callback did not include code and state."));
-        } else {
-          resolve({ code, state });
-        }
-      };
-
       const cleanup = (): void => {
         clearTimeout(timer);
         signal?.removeEventListener("abort", onAbort);
-        server.removeListener("request", onRequest);
+        this.waiter = null;
       };
-
-      server.on("request", onRequest);
+      this.waiter = (callback) => {
+        cleanup();
+        try {
+          resolve(settle(callback));
+        } catch (error) {
+          reject(error as Error);
+        }
+      };
     });
   }
 
@@ -102,6 +120,7 @@ export class OAuthCallbackServer {
     const server = this.server;
     this.server = null;
     this.callbackUrl = null;
+    this.received = null;
     if (server === null) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

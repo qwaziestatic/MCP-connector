@@ -24,16 +24,16 @@ const expired: StoredCredential = {
 describe("VaultTokenProvider", () => {
   it("returns a token that has no expiry", async () => {
     const vault = vaultWith({ ...expired, provider: "github", expiresAt: null, refreshToken: null });
-    await expect(new VaultTokenProvider(vault, "github", null).getAccessToken()).resolves.toBe("old");
+    await expect(new VaultTokenProvider(vault, "github", "GitHub", null).getAccessToken()).resolves.toBe("old");
   });
 
   it("says how to fix a missing connection", async () => {
-    await expect(new VaultTokenProvider(vaultWith(null), "github", null).getAccessToken())
+    await expect(new VaultTokenProvider(vaultWith(null), "github", "GitHub", null).getAccessToken())
       .rejects.toThrow("GitHub is not connected");
   });
 
   it("asks to connect again when an expired token cannot be refreshed", async () => {
-    await expect(new VaultTokenProvider(vaultWith({ ...expired, provider: "github" }), "github", null).getAccessToken())
+    await expect(new VaultTokenProvider(vaultWith({ ...expired, provider: "github" }), "github", "GitHub", null).getAccessToken())
       .rejects.toThrow("Connect GitHub again");
   });
 
@@ -41,14 +41,14 @@ describe("VaultTokenProvider", () => {
     const vault = vaultWith({ ...expired, expiresAt: new Date(Date.now() + 30_000).toISOString() });
     const refreshed: OAuthTokenSet = { accessToken: "new", refreshToken: "refresh-2", expiresAt: null, tokenType: "bearer", scope: null };
 
-    await expect(new VaultTokenProvider(vault, "notion", async () => refreshed).getAccessToken()).resolves.toBe("new");
+    await expect(new VaultTokenProvider(vault, "notion", "Notion", async () => refreshed).getAccessToken()).resolves.toBe("new");
   });
 
   it("refreshes an expired token once and saves it", async () => {
     const vault = vaultWith(expired);
     const refreshed: OAuthTokenSet = { accessToken: "new", refreshToken: "refresh-2", expiresAt: null, tokenType: "bearer", scope: null };
     const refresh = vi.fn(async () => refreshed);
-    const provider = new VaultTokenProvider(vault, "notion", refresh);
+    const provider = new VaultTokenProvider(vault, "notion", "Notion", refresh);
 
     await expect(Promise.all([provider.getAccessToken(), provider.getAccessToken()])).resolves.toEqual(["new", "new"]);
     expect(refresh).toHaveBeenCalledTimes(1);

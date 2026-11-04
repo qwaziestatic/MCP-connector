@@ -16,7 +16,9 @@ The repository contains the feature-complete MVP implementation:
 - DPAPI-backed credential storage through Electron `safeStorage`
 - GitHub sign-in with a short code (device flow) and Notion sign-in through a
   small sign-in service, so no client secret ships in the installer
-- GitHub and Notion connectors
+- Connectors for GitHub and Notion, each described by one connector definition,
+  so adding a service does not touch the rest of the app (see "Adding a
+  connector" below)
 - Authenticated loopback MCP HTTP and stdio transports
 - Authenticated VS Code context listener and companion extension
 - Windows NSIS installer and VSIX packaging
@@ -74,6 +76,28 @@ npm run package:vscode
 
 The generated installer, VSIX, and other build artifacts are ignored by Git.
 Publish them as release assets rather than committing them to the source tree.
+
+## Adding a connector
+
+Each service is one `ConnectorDefinition` in `packages/core/src/connectors`;
+`github.definition.ts` and `notion.definition.ts` are the examples. A
+definition gives:
+
+- `id` and `name`, used by the vault, the settings, and the window;
+- `signIn`, one of the sign-in kinds the app has (a device code, or the
+  browser through the sign-in service); a service that signs in like an
+  existing one needs no new sign-in code;
+- `settings`, the values the user sets in the window, each with a `parse`
+  function that explains a bad value;
+- `registerTools`, the service's MCP tools; and
+- `previews`, if the service's tools change anything: the preview is shown to
+  the user, and `prepare` checks the sign-in and settings before an approval
+  is used.
+
+Add the definition to `createBuiltInConnectors` in `built-in.ts`. The vault,
+the connections card, the settings file, and the MCP server pick it up from
+there. Tools read sign-in and settings when they run, so connecting a service
+or changing a setting reaches a server that is already running.
 
 ## Security model
 

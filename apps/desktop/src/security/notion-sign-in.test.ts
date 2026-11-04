@@ -19,6 +19,7 @@ function setUp(browser: (port: number, state: string) => string | null, client: 
   const servers: OAuthCallbackServer[] = [];
   const exchanged: string[] = [];
   const signIn = new NotionSignIn(
+    "notion",
     () => ({
       authorizationUrl: (port, state) => browser(port, state) ?? `http://127.0.0.1:${port}/never`,
       exchangeCode: async (code) => {
@@ -35,7 +36,8 @@ function setUp(browser: (port: number, state: string) => string | null, client: 
     { save: async (credential) => { saved.push(credential); } },
     async (url) => {
       opened.push(url);
-      if (!url.endsWith("/never")) void fetch(url).catch(() => undefined);
+      // The browser comes back at once, before the app starts waiting.
+      if (!url.endsWith("/never")) await fetch(url);
     },
     () => "state-from-the-app"
   );
@@ -46,7 +48,8 @@ describe("NotionSignIn", () => {
   it("saves the token once the browser comes back with a code", async () => {
     const { signIn, saved, exchanged } = setUp((port, state) => `http://127.0.0.1:${port}/oauth/callback?code=abc&state=${state}`);
 
-    await signIn.connect();
+    await expect(signIn.start()).resolves.toEqual({ kind: "browser" });
+    await signIn.finish();
 
     expect(exchanged).toEqual(["abc"]);
     expect(saved).toEqual([{ provider: "notion", ...result.token }]);
@@ -55,22 +58,22 @@ describe("NotionSignIn", () => {
   it("refuses a return it did not start", async () => {
     const { signIn, saved, exchanged } = setUp((port) => `http://127.0.0.1:${port}/oauth/callback?code=abc&state=someone-else`);
 
-    await expect(signIn.connect()).rejects.toThrow("did not start in MCP Connector");
+    await signIn.start();
+    await expect(signIn.finish()).rejects.toThrow("did not start in MCP Connector");
     expect(exchanged).toEqual([]);
     expect(saved).toEqual([]);
   });
 
   it("explains a sign-in declined in the browser", async () => {
     const { signIn } = setUp((port, state) => `http://127.0.0.1:${port}/oauth/callback?error=access_denied&state=${state}`);
-    await expect(signIn.connect()).rejects.toThrow("declined in the browser");
+    await signIn.start();
+    await expect(signIn.finish()).rejects.toThrow("declined in the browser");
   });
 
   it("stops waiting and closes its listener when cancelled", async () => {
     const { signIn, saved, opened } = setUp(() => null);
-    const connecting = signIn.connect();
-    for (let attempt = 0; attempt < 50 && opened.length === 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await signIn.start();
+    const connecting = signIn.finish();
     const port = new URL(opened[0] ?? "").port;
     signIn.cancel();
 
@@ -82,13 +85,14 @@ describe("NotionSignIn", () => {
   it("opens nothing when this copy has no sign-in service", async () => {
     const opened: string[] = [];
     const signIn = new NotionSignIn(
+      "notion",
       () => { throw new Error("Notion sign-in is not set up in this copy of MCP Connector"); },
       () => new OAuthCallbackServer(),
       { save: async () => undefined },
       async (url) => { opened.push(url); }
     );
 
-    await expect(signIn.connect()).rejects.toThrow("not set up");
+    await expect(signIn.start()).rejects.toThrow("not set up");
     expect(opened).toEqual([]);
   });
 });
