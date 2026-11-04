@@ -21,6 +21,43 @@ describe("buildAgentConfigs", () => {
     });
   });
 
+  it("builds VS Code's mcp.json entry, which uses \"servers\" and a type", () => {
+    expect(JSON.parse(buildAgentConfigs(endpoint).vsCode)).toEqual({
+      servers: {
+        "mcp-connector": {
+          type: "http",
+          url: "http://127.0.0.1:47820/mcp",
+          headers: { Authorization: "Bearer abc_DEF-123" }
+        }
+      }
+    });
+  });
+
+  it("builds Codex's config.toml table", () => {
+    expect(buildAgentConfigs(endpoint).codex).toBe([
+      "[mcp_servers.mcp-connector]",
+      'url = "http://127.0.0.1:47820/mcp"',
+      'http_headers = { "Authorization" = "Bearer abc_DEF-123" }'
+    ].join("\n"));
+  });
+
+  it("builds the Gemini CLI command, saved for the user rather than one project", () => {
+    expect(buildAgentConfigs(endpoint).geminiCli).toBe(
+      'gemini mcp add --scope user --transport http --header "Authorization: Bearer abc_DEF-123" mcp-connector http://127.0.0.1:47820/mcp'
+    );
+  });
+
+  it("builds Windsurf's mcp_config.json entry, which uses serverUrl", () => {
+    expect(JSON.parse(buildAgentConfigs(endpoint).windsurf)).toEqual({
+      mcpServers: {
+        "mcp-connector": {
+          serverUrl: "http://127.0.0.1:47820/mcp",
+          headers: { Authorization: "Bearer abc_DEF-123" }
+        }
+      }
+    });
+  });
+
   it("leaves out stdio setup when the app is not installed", () => {
     const configs = buildAgentConfigs(endpoint);
     expect(configs.claudeCodeStdio).toBeNull();

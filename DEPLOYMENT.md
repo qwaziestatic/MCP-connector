@@ -121,10 +121,20 @@ artifacts and a tested feed are available.
 
 The MCP server listens on `http://127.0.0.1:47820/mcp` and requires a bearer
 token. The token is generated once, stored encrypted in the credential vault,
-and reused after restarts, so each agent is set up once. In the app, **Copy
-setup for Claude Code** and **Copy setup for Cursor** copy a ready-to-paste
-command or `mcp.json` entry. **New token** replaces the token; agents set up
-with the old one must be set up again.
+and reused after restarts, so each agent is set up once. In the app, the
+buttons under **Copy the setup for your agent** copy a ready-to-paste setup:
+
+| Agent | What is copied | Where it goes |
+| --- | --- | --- |
+| Claude Code | a `claude mcp add` command | run it in a terminal |
+| Cursor | an `mcpServers` entry | `~/.cursor/mcp.json` |
+| VS Code (GitHub Copilot) | a `servers` entry with `"type": "http"` | **MCP: Open User Configuration**, or `.vscode/mcp.json` |
+| Codex | an `[mcp_servers.mcp-connector]` table | `~/.codex/config.toml` |
+| Gemini CLI | a `gemini mcp add --scope user` command | run it in a terminal |
+| Windsurf | an `mcpServers` entry with `serverUrl` | its `mcp_config.json`, opened from Cascade's MCP settings |
+
+Every setup carries the bearer token, so keep these files private. **New
+token** replaces the token; agents set up with the old one must be set up again.
 
 Non-secret settings live in `settings.json` in the app's user-data folder:
 

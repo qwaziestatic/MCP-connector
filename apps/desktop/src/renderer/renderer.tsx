@@ -6,7 +6,18 @@ import type {
   WorkspaceSnapshot
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
+import type { AgentConfigs } from "../shared/desktop-api";
 import { ConnectionsCard } from "./connections-card";
+
+/** Agents that connect over HTTP, in the order their buttons appear. */
+const httpAgents: readonly { readonly key: keyof AgentConfigs; readonly name: string }[] = [
+  { key: "claudeCode", name: "Claude Code" },
+  { key: "cursor", name: "Cursor" },
+  { key: "vsCode", name: "VS Code (Copilot)" },
+  { key: "codex", name: "Codex" },
+  { key: "geminiCli", name: "Gemini CLI" },
+  { key: "windsurf", name: "Windsurf" }
+];
 import "./styles.css";
 
 const entryLabels: Readonly<Record<WorkspaceSnapshot["entries"][number]["type"], string>> = {
@@ -215,7 +226,7 @@ export function App(): JSX.Element {
   };
 
   const copyAgentConfig = async (
-    agent: "claudeCode" | "cursor" | "claudeCodeStdio" | "stdioJson"
+    agent: keyof AgentConfigs
   ): Promise<void> => {
     setError(null);
     try {
@@ -508,13 +519,21 @@ export function App(): JSX.Element {
           <button className={`button ${mcpStatus.enabled ? "danger" : "secondary"}`} onClick={() => void updateMcp(mcpStatus.enabled)} disabled={busy}>
             {mcpStatus.enabled ? "Stop MCP server" : "Start MCP server"}
           </button>
-          <button className="button ghost" onClick={() => void copyAgentConfig("claudeCode")} disabled={mcpStatus.url === null}>
-            {copied === "claudeCode" ? "Copied" : "Copy setup for Claude Code"}
-          </button>
-          <button className="button ghost" onClick={() => void copyAgentConfig("cursor")} disabled={mcpStatus.url === null}>
-            {copied === "cursor" ? "Copied" : "Copy setup for Cursor"}
-          </button>
         </div>
+        <p className="muted">Copy the setup for your agent:</p>
+        <div className="actions endpoint-actions agent-setups">
+          {httpAgents.map(({ key, name }) => (
+            <button key={key} className="button ghost" onClick={() => void copyAgentConfig(key)} disabled={mcpStatus.url === null}>
+              {copied === key ? "Copied" : name}
+            </button>
+          ))}
+        </div>
+        <p className="muted agent-setup-help">
+          Claude Code and Gemini CLI: run the copied command in a terminal. Cursor: add the entry to
+          ~/.cursor/mcp.json. VS Code: run "MCP: Open User Configuration" and add the entry. Codex: add
+          the table to ~/.codex/config.toml. Windsurf: add the entry to its mcp_config.json, from
+          Cascade's MCP settings.
+        </p>
         <p className="muted">
           For agents that only support stdio, copy a setup that launches MCP Connector in stdio mode.
           It relays to this window, so keep the app open with the MCP server running.

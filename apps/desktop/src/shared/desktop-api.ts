@@ -13,6 +13,10 @@ export interface ListenerStatus {
 export interface AgentConfigs {
   readonly claudeCode: string;
   readonly cursor: string;
+  readonly vsCode: string;
+  readonly codex: string;
+  readonly geminiCli: string;
+  readonly windsurf: string;
   /** Null outside the installed app. */
   readonly claudeCodeStdio: string | null;
   readonly stdioJson: string | null;

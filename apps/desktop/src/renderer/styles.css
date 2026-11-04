@@ -70,7 +70,9 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .preview p { margin: 18px 0; line-height: 1.5; }
 pre { max-height: 220px; overflow: auto; padding: 14px; border-radius: 8px; background: #0b1524; color: #aed2f3; font-size: 12px; white-space: pre-wrap; }
 .actions { justify-content: flex-end; gap: 10px; margin-top: 18px; }
-.endpoint-actions { justify-content: flex-start; }
+.endpoint-actions { justify-content: flex-start; flex-wrap: wrap; }
+.agent-setups { margin-top: 8px; }
+.agent-setup-help { margin-top: 10px; font-size: 12px; }
 .endpoint-details { display: grid; gap: 10px; margin-top: 18px; }
 .endpoint-value { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid #263a54; border-radius: 8px; }
 .endpoint-value span { color: #91a4ba; font-size: 12px; }
