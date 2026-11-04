@@ -1,43 +1,16 @@
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  GitHubConnector,
-  NotionConnector
-} from "../connectors/connector.types.js";
-import {
-  createNotionPagePreview,
-  executeNotionPagePreview,
-  NOTION_MAX_MARKDOWN_LENGTH,
-  NOTION_MAX_TITLE_LENGTH
-} from "../connectors/notion-page.js";
+import type { ConnectedConnector } from "../connectors/connector-definition.js";
 import { FilesystemService } from "../filesystem/filesystem.service.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
+import { result } from "./tool-result.js";
 import { z } from "zod";
 
 export interface McpConnectorDependencies {
   readonly filesystem: FilesystemService;
   readonly workflow: WorkflowService;
-  readonly github?: GitHubConnector;
-  readonly notion?: NotionConnector;
-}
-
-interface TextResult {
-  readonly [key: string]: unknown;
-  readonly content: [{ type: "text"; text: string }];
-  readonly structuredContent?: Readonly<Record<string, unknown>>;
-}
-
-function result(value: unknown): TextResult {
-  const textResult: TextResult = {
-    content: [{ type: "text", text: JSON.stringify(value, null, 2) }]
-  };
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    return {
-      ...textResult,
-      structuredContent: value as Readonly<Record<string, unknown>>
-    };
-  }
-  return textResult;
+  /** Each service's definition and how its tools reach it; each adds its own tools. */
+  readonly connectors?: readonly ConnectedConnector[];
 }
 
 export function createMcpServer(dependencies: McpConnectorDependencies): McpServer {
@@ -98,58 +71,6 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
   );
 
   server.registerTool(
-    "github_list_repositories",
-    {
-      title: "List GitHub repositories",
-      description: "List repositories accessible to the connected GitHub account.",
-      inputSchema: {
-        name: z.string().trim().min(1).max(200).optional()
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true
-      }
-    },
-    async ({ name }) => {
-      if (dependencies.github === undefined) {
-        throw new Error("GitHub connector is not configured.");
-      }
-      return result(await dependencies.github.listRepositories(
-        name === undefined ? {} : { name }
-      ));
-    }
-  );
-
-  server.registerTool(
-    "notion_create_project_page_preview",
-    {
-      title: "Preview Notion project page creation",
-      description: "Create a preview of a Notion page from a title and Markdown. This tool never writes to Notion. "
-        + "Ask the user to review and approve the preview in the MCP Connector app, then call "
-        + "workflow_preview_status until it is APPROVED (then call notion_create_project_page) "
-        + "or REJECTED (then stop). Headings, lists, to-dos, quotes, code blocks and dividers are kept; "
-        + "inline formatting such as **bold** or links appears as plain text.",
-      inputSchema: {
-        title: z.string().min(1).max(NOTION_MAX_TITLE_LENGTH),
-        markdown: z.string().max(NOTION_MAX_MARKDOWN_LENGTH)
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: true
-      }
-    },
-    async ({ title, markdown }) => {
-      const preview = await createNotionPagePreview(dependencies.workflow, { title, markdown }, "mcp");
-      return result({
-        requiresApproval: true,
-        preview
-      });
-    }
-  );
-
-  server.registerTool(
     "workflow_preview_status",
     {
       title: "Get workflow preview status",
@@ -165,32 +86,9 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
     })
   );
 
-  server.registerTool(
-    "notion_create_project_page",
-    {
-      title: "Create approved Notion project page",
-      description: "Execute an already approved Notion page preview. The preview ID must have explicit HITL approval.",
-      inputSchema: {
-        previewId: z.string().uuid()
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: true
-      }
-    },
-    async ({ previewId }) => {
-      const notion = dependencies.notion;
-      if (notion === undefined) {
-        throw new Error("Notion connector is not configured.");
-      }
-      const page = await dependencies.workflow.executeApproved(
-        previewId,
-        (preview) => executeNotionPagePreview(preview, notion)
-      );
-      return result(page);
-    }
-  );
+  for (const { definition, runtime } of dependencies.connectors ?? []) {
+    definition.registerTools(server, { runtime, workflow: dependencies.workflow });
+  }
 
   return server;
 }

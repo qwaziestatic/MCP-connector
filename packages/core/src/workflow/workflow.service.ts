@@ -221,6 +221,15 @@ export class WorkflowService {
       .filter((state) => state.status === "PREVIEWED" || state.status === "APPROVED");
   }
 
+  /** The preview as the user saw it. */
+  async getPreview(previewId: string): Promise<WorkflowPreview> {
+    const pending = await this.getPending(previewId);
+    if (pending === undefined) {
+      throw new Error("Workflow preview was not found.");
+    }
+    return pending.preview;
+  }
+
   async getStatus(previewId: string): Promise<WorkflowStatus> {
     const pending = await this.getPending(previewId);
     if (pending === undefined) {

@@ -1,12 +1,6 @@
 import type { GitHubDeviceAuthorization, OAuthTokenSet } from "@mcp-connector/core";
 import type { StoredCredential } from "./credential-vault";
-
-/** What the window shows while the user enters the code on github.com. */
-export interface GitHubSignInCode {
-  readonly userCode: string;
-  readonly verificationUri: string;
-  readonly expiresAt: string;
-}
+import type { SignInFlow, SignInPrompt } from "./sign-in-flow";
 
 export interface GitHubDeviceFlowLike {
   start(): Promise<GitHubDeviceAuthorization>;
@@ -20,23 +14,26 @@ interface PendingSignIn {
 
 /**
  * One GitHub sign-in at a time: start() gets a code, the window shows it,
- * waitForToken() saves the token once the user approves on github.com.
+ * finish() saves the token once the user approves on github.com.
  */
-export class GitHubSignIn {
+export class GitHubSignIn implements SignInFlow {
   private pending: PendingSignIn | null = null;
 
   public constructor(
+    /** The connector the token belongs to. */
+    private readonly connectorId: string,
     private readonly createFlow: () => GitHubDeviceFlowLike,
     private readonly vault: { save(credential: StoredCredential): Promise<void> },
     private readonly openExternal: (url: string) => Promise<void>
   ) {}
 
-  async start(): Promise<GitHubSignInCode> {
+  async start(): Promise<SignInPrompt> {
     this.cancel();
     const flow = this.createFlow();
     const authorization = await flow.start();
     this.pending = { authorization, controller: new AbortController() };
     return {
+      kind: "code",
       userCode: authorization.userCode,
       verificationUri: authorization.verificationUri,
       expiresAt: authorization.expiresAt
@@ -44,7 +41,7 @@ export class GitHubSignIn {
   }
 
   /** Opens GitHub's code page. Only GitHub's own address is ever opened. */
-  async openVerificationPage(): Promise<void> {
+  async openPage(): Promise<void> {
     const pending = this.requirePending();
     const url = new URL(pending.authorization.verificationUri);
     if (url.protocol !== "https:" || url.hostname !== "github.com") {
@@ -53,12 +50,12 @@ export class GitHubSignIn {
     await this.openExternal(url.href);
   }
 
-  async waitForToken(): Promise<void> {
+  async finish(): Promise<void> {
     const pending = this.requirePending();
     try {
       const token = await this.createFlow().waitForToken(pending.authorization, pending.controller.signal);
       await this.vault.save({
-        provider: "github",
+        provider: this.connectorId,
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
         expiresAt: token.expiresAt,

@@ -15,7 +15,9 @@ const appSettingsSchema = z.object({
   /** Whether the MCP server was running when the app last closed. */
   mcpServerEnabled: z.boolean().optional().catch(undefined),
   /** Whether the VS Code listener was running when the app last closed. */
-  vscodeListenerEnabled: z.boolean().optional().catch(undefined)
+  vscodeListenerEnabled: z.boolean().optional().catch(undefined),
+  /** Each connector's settings, by connector id and then setting key. */
+  connectorSettings: z.record(z.string(), z.record(z.string(), z.string())).optional().catch(undefined)
 });
 
 export type AppSettings = z.infer<typeof appSettingsSchema>;

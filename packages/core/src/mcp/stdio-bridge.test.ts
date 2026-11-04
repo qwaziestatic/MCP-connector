@@ -70,7 +70,7 @@ describe("runStdioBridge", () => {
     const tools = (await agent.response(2)).result as { tools: Array<{ name: string }> };
     expect(tools.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
       "workspace_get_selected",
-      "notion_create_project_page_preview"
+      "workflow_preview_status"
     ]));
   });
 

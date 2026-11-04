@@ -93,7 +93,9 @@ value; `http://127.0.0.1:8787` works with `npm run dev` in the Worker's folder.
 
 Configure these environment variables before starting the application:
 
-- `MCP_NOTION_DATABASE_ID` (the database the Notion tools add pages to)
+- `MCP_NOTION_DATABASE_ID` (optional: the database the Notion tools add pages
+  to, for setups made before the app could store it. Users now paste the
+  database's link next to Notion in the app, and a value saved there wins.)
 - `MCP_HTTP_ENABLED` (set to `true` to always start the MCP server at launch;
   without it, the server starts at launch if it was running when the app last closed)
 - `MCP_UPDATER_ENABLED` (set to `true` to enable update checks)

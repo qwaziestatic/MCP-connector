@@ -1,6 +1,7 @@
 import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
-import type { GitHubSignInCode } from "../security/github-sign-in";
+import type { ConnectorView } from "../connection/connector-hub";
+import type { SignInPrompt } from "../security/sign-in-flow";
 
 export interface ListenerStatus {
   readonly enabled: boolean;
@@ -76,22 +77,19 @@ export interface DesktopApi {
     readonly executeApproved: (previewId: string) => Promise<{ readonly pageId: string; readonly url: string | null }>;
     readonly listAuditRecords: () => Promise<readonly AuditRecord[]>;
   };
-  readonly credentials: {
-    readonly getStatus: () => Promise<Readonly<Record<"github" | "notion", boolean>>>;
-    /**
-     * Notion only: opens the browser and resolves once the user allows access.
-     * GitHub signs in with startGitHub() and waitForGitHub().
-     */
-    readonly connect: (provider: "notion") => Promise<void>;
-    readonly cancelNotion: () => Promise<void>;
-    /** Gets a code for the user to enter on github.com. */
-    readonly startGitHub: () => Promise<GitHubSignInCode>;
-    /** Opens github.com's code page in the browser. */
-    readonly openGitHub: () => Promise<void>;
-    /** Resolves once the user approves on github.com and the token is saved. */
-    readonly waitForGitHub: () => Promise<void>;
-    readonly cancelGitHub: () => Promise<void>;
-    readonly disconnect: (provider: "github" | "notion") => Promise<void>;
+  /** Every service the app connects to, from the connector definitions. */
+  readonly connectors: {
+    readonly list: () => Promise<readonly ConnectorView[]>;
+    /** Starts signing in; the prompt says whether to show a code or wait for the browser. */
+    readonly startSignIn: (id: string) => Promise<SignInPrompt>;
+    /** Opens the page where the user enters the code. */
+    readonly openSignInPage: (id: string) => Promise<void>;
+    /** Resolves once the user approved and the token is saved. */
+    readonly finishSignIn: (id: string) => Promise<void>;
+    readonly cancelSignIn: (id: string) => Promise<void>;
+    readonly disconnect: (id: string) => Promise<void>;
+    /** Saves a setting from what the user typed; an empty value clears it. */
+    readonly setSetting: (id: string, key: string, value: string) => Promise<ConnectorView>;
   };
   readonly mcp: {
     readonly getStatus: () => Promise<ListenerStatus>;

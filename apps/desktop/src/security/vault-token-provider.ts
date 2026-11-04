@@ -1,8 +1,6 @@
 import type { ConnectorTokenProvider, OAuthTokenSet } from "@mcp-connector/core";
 import type { StoredCredential } from "./credential-vault";
 
-const providerNames = { github: "GitHub", notion: "Notion" } as const;
-
 /** Renew a little early, so a token cannot expire in the middle of a request. */
 const RENEW_BEFORE_EXPIRY_MS = 60_000;
 
@@ -13,6 +11,8 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
       save(credential: StoredCredential): Promise<void>;
     },
     private readonly provider: StoredCredential["provider"],
+    /** The connector's name, for messages. */
+    private readonly name: string,
     /** Null when this provider's tokens cannot be refreshed. */
     private readonly refresh: ((refreshToken: string) => Promise<OAuthTokenSet>) | null
   ) {}
@@ -20,7 +20,7 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
   private refreshPromise: Promise<string> | null = null;
 
   async getAccessToken(): Promise<string> {
-    const name = providerNames[this.provider];
+    const name = this.name;
     const credential = await this.vault.get(this.provider);
     if (credential === null) {
       throw new Error(`${name} is not connected. Connect it in MCP Connector first.`);
@@ -50,7 +50,7 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
     refresh: (refreshToken: string) => Promise<OAuthTokenSet>,
     refreshToken: string
   ): Promise<string> {
-    const name = providerNames[this.provider];
+    const name = this.name;
     try {
       const refreshed = await refresh(refreshToken);
       const current = await this.vault.get(this.provider);
