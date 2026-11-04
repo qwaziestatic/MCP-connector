@@ -422,7 +422,11 @@ app.whenReady().then(async () => {
     }
     createMainWindow();
   } catch (error) {
-    console.error("Unable to initialize MCP Connector database.", error);
+    console.error("MCP Connector could not start.", error);
+    dialog.showErrorBox(
+      "MCP Connector could not start",
+      error instanceof Error ? error.message : String(error)
+    );
     await prisma.$disconnect();
     app.quit();
     return;
