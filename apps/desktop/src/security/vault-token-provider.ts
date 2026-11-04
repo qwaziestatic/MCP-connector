@@ -1,24 +1,26 @@
-import type { ConnectorTokenProvider } from "@mcp-connector/core";
-import type { OAuthProviderConfig, OAuthTokenSet } from "@mcp-connector/core";
-import { CredentialVault } from "./credential-vault";
+import type { ConnectorTokenProvider, OAuthTokenSet } from "@mcp-connector/core";
+import type { StoredCredential } from "./credential-vault";
+
+const providerNames = { github: "GitHub", notion: "Notion" } as const;
 
 export class VaultTokenProvider implements ConnectorTokenProvider {
   public constructor(
-    private readonly vault: CredentialVault,
-    private readonly provider: "github" | "notion",
-    private readonly getConfig: () => OAuthProviderConfig,
-    private readonly refresh: (
-      config: OAuthProviderConfig,
-      refreshToken: string
-    ) => Promise<OAuthTokenSet>
+    private readonly vault: {
+      get(provider: StoredCredential["provider"]): Promise<StoredCredential | null>;
+      save(credential: StoredCredential): Promise<void>;
+    },
+    private readonly provider: StoredCredential["provider"],
+    /** Null when this provider's tokens cannot be refreshed. */
+    private readonly refresh: ((refreshToken: string) => Promise<OAuthTokenSet>) | null
   ) {}
 
   private refreshPromise: Promise<string> | null = null;
 
   async getAccessToken(): Promise<string> {
+    const name = providerNames[this.provider];
     const credential = await this.vault.get(this.provider);
     if (credential === null) {
-      throw new Error(`${this.provider} is not connected.`);
+      throw new Error(`${name} is not connected. Connect it in MCP Connector first.`);
     }
     if (
       credential.expiresAt === null ||
@@ -27,26 +29,30 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
       return credential.accessToken;
     }
 
-    if (credential.refreshToken === null) {
-      throw new Error(`${this.provider} authorization has expired and cannot be refreshed. Reconnect the integration.`);
+    if (credential.refreshToken === null || this.refresh === null) {
+      throw new Error(`${name} sign-in has expired. Connect ${name} again in MCP Connector.`);
     }
     if (this.refreshPromise !== null) {
       return this.refreshPromise;
     }
 
-    this.refreshPromise = this.refreshCredential(credential.refreshToken)
+    this.refreshPromise = this.refreshCredential(this.refresh, credential.refreshToken)
       .finally(() => {
         this.refreshPromise = null;
       });
     return this.refreshPromise;
   }
 
-  private async refreshCredential(refreshToken: string): Promise<string> {
+  private async refreshCredential(
+    refresh: (refreshToken: string) => Promise<OAuthTokenSet>,
+    refreshToken: string
+  ): Promise<string> {
+    const name = providerNames[this.provider];
     try {
-      const refreshed = await this.refresh(this.getConfig(), refreshToken);
+      const refreshed = await refresh(refreshToken);
       const current = await this.vault.get(this.provider);
       if (current === null) {
-        throw new Error(`${this.provider} credential was removed during refresh.`);
+        throw new Error(`${name} was disconnected during refresh.`);
       }
       await this.vault.save({
         ...current,
@@ -59,7 +65,7 @@ export class VaultTokenProvider implements ConnectorTokenProvider {
       return refreshed.accessToken;
     } catch (error) {
       throw new Error(
-        `${this.provider} authorization refresh failed. Reconnect the integration.`,
+        `${name} sign-in could not be renewed. Connect ${name} again in MCP Connector.`,
         { cause: error }
       );
     }

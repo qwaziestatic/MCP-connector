@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AuditRecord,
   WorkflowPreview,
@@ -6,6 +6,7 @@ import type {
   WorkspaceSnapshot
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
+import type { GitHubSignInCode } from "../security/github-sign-in";
 import "./styles.css";
 
 const entryLabels: Readonly<Record<WorkspaceSnapshot["entries"][number]["type"], string>> = {
@@ -18,6 +19,16 @@ function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(value));
+}
+
+/** The main process's message, without Electron's "Error invoking remote method" prefix. */
+function ipcErrorMessage(cause: unknown, fallback: string): string {
+  if (!(cause instanceof Error)) return fallback;
+  return cause.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "");
 }
 
 function formatDate(value: string): string {
@@ -86,6 +97,9 @@ export function App(): JSX.Element {
     message: null
   });
   const [copied, setCopied] = useState<string | null>(null);
+  // Shown while the user enters the code on github.com.
+  const [githubCode, setGitHubCode] = useState<GitHubSignInCode | null>(null);
+  const githubCancelled = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,16 +159,61 @@ export function App(): JSX.Element {
     return () => window.clearInterval(poll);
   }, [updaterStatus.phase]);
 
+  const connectGitHub = async (): Promise<void> => {
+    setError(null);
+    setBusy(true);
+    githubCancelled.current = false;
+    try {
+      setGitHubCode(await window.desktopApi.credentials.startGitHub());
+    } catch (cause: unknown) {
+      setError(ipcErrorMessage(cause, "Unable to start GitHub sign-in."));
+      return;
+    } finally {
+      setBusy(false);
+    }
+    try {
+      await window.desktopApi.credentials.waitForGitHub();
+      setConnectionStatus(await window.desktopApi.credentials.getStatus());
+    } catch (cause: unknown) {
+      if (!githubCancelled.current) setError(ipcErrorMessage(cause, "GitHub sign-in failed."));
+    } finally {
+      setGitHubCode(null);
+    }
+  };
+
+  const openGitHub = async (): Promise<void> => {
+    if (githubCode === null) return;
+    try {
+      await copyValue("github-code", githubCode.userCode);
+    } catch {
+      // The code is on screen if the clipboard is unavailable.
+    }
+    try {
+      await window.desktopApi.credentials.openGitHub();
+    } catch (cause: unknown) {
+      setError(ipcErrorMessage(cause, "Unable to open GitHub."));
+    }
+  };
+
+  const cancelGitHub = async (): Promise<void> => {
+    githubCancelled.current = true;
+    await window.desktopApi.credentials.cancelGitHub();
+  };
+
   const updateConnection = async (
     provider: "github" | "notion",
     connected: boolean
   ): Promise<void> => {
+    if (provider === "github" && !connected) {
+      await connectGitHub();
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
       if (connected) {
         await window.desktopApi.credentials.disconnect(provider);
-      } else {
+      } else if (provider === "notion") {
         await window.desktopApi.credentials.connect(provider);
       }
       setConnectionStatus(await window.desktopApi.credentials.getStatus());
@@ -466,21 +525,45 @@ export function App(): JSX.Element {
           <span className="muted">Tokens remain in Windows-protected storage.</span>
         </div>
         <div className="integration-list">
-          {(["github", "notion"] as const).map((provider) => (
-            <div className="integration-row" key={provider}>
-              <div>
-                <strong>{provider === "github" ? "GitHub" : "Notion"}</strong>
-                <p className="muted">{connectionStatus[provider] ? "Connected" : "Not connected"}</p>
+          {(["github", "notion"] as const).map((provider) => {
+            const waitingForGitHub = provider === "github" && githubCode !== null;
+            return (
+              <div key={provider}>
+                <div className="integration-row">
+                  <div>
+                    <strong>{provider === "github" ? "GitHub" : "Notion"}</strong>
+                    <p className="muted">
+                      {waitingForGitHub
+                        ? "Waiting for you to approve on github.com"
+                        : connectionStatus[provider] ? "Connected" : "Not connected"}
+                    </p>
+                  </div>
+                  <button
+                    className={`button ${connectionStatus[provider] ? "danger" : "secondary"}`}
+                    onClick={() => void updateConnection(provider, connectionStatus[provider])}
+                    disabled={busy || waitingForGitHub}
+                  >
+                    {connectionStatus[provider] ? "Disconnect" : "Connect"}
+                  </button>
+                </div>
+                {waitingForGitHub && (
+                  <div className="device-code" role="status">
+                    <div>
+                      <p>Enter this code on GitHub to connect your account:</p>
+                      <code className="device-code-value">{githubCode.userCode}</code>
+                      <p className="muted">The code works until {formatTime(githubCode.expiresAt)}.</p>
+                    </div>
+                    <div className="actions">
+                      <button className="button primary" onClick={() => void openGitHub()}>
+                        {copied === "github-code" ? "Code copied" : "Copy code and open GitHub"}
+                      </button>
+                      <button className="button ghost" onClick={() => void cancelGitHub()}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                className={`button ${connectionStatus[provider] ? "danger" : "secondary"}`}
-                onClick={() => void updateConnection(provider, connectionStatus[provider])}
-                disabled={busy}
-              >
-                {connectionStatus[provider] ? "Disconnect" : "Connect"}
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

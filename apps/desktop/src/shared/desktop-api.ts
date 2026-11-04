@@ -1,5 +1,6 @@
 import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
+import type { GitHubSignInCode } from "../security/github-sign-in";
 
 export interface ListenerStatus {
   readonly enabled: boolean;
@@ -77,7 +78,15 @@ export interface DesktopApi {
   };
   readonly credentials: {
     readonly getStatus: () => Promise<Readonly<Record<"github" | "notion", boolean>>>;
-    readonly connect: (provider: "github" | "notion") => Promise<void>;
+    /** Notion only: GitHub signs in with startGitHub() and waitForGitHub(). */
+    readonly connect: (provider: "notion") => Promise<void>;
+    /** Gets a code for the user to enter on github.com. */
+    readonly startGitHub: () => Promise<GitHubSignInCode>;
+    /** Opens github.com's code page in the browser. */
+    readonly openGitHub: () => Promise<void>;
+    /** Resolves once the user approves on github.com and the token is saved. */
+    readonly waitForGitHub: () => Promise<void>;
+    readonly cancelGitHub: () => Promise<void>;
     readonly disconnect: (provider: "github" | "notion") => Promise<void>;
   };
   readonly mcp: {

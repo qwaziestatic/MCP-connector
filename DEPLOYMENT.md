@@ -32,14 +32,42 @@ The signed command uses
 `apps/desktop/electron-builder.signed.yml`; the default command remains the
 unsigned local-build path.
 
+## Sign-in setup
+
+### GitHub
+
+GitHub sign-in uses GitHub's device flow: the app shows a short code, the user
+enters it on github.com, and the app never needs a client secret. Only the
+OAuth app's client ID is built into the installer, and a client ID is public.
+
+1. On GitHub, open **Settings → Developer settings → OAuth Apps → New OAuth
+   App**. Use any name (for example "MCP Connector"), and the repository URL
+   as both the homepage URL and the callback URL; the device flow does not use
+   the callback URL, but the form requires one.
+2. Register the app, then tick **Enable Device Flow** on its settings page and
+   save. Without it, GitHub refuses the sign-in and the app says so.
+3. Copy the **Client ID**. Do not generate a client secret: the app does not use one.
+4. Set the client ID while building the installer:
+
+   ```powershell
+   $env:MCP_GITHUB_CLIENT_ID = "<client ID>"
+   npm run package:win
+   ```
+
+   For the release workflow, add it as a repository variable named
+   `MCP_GITHUB_CLIENT_ID` under **Settings → Secrets and variables → Actions →
+   Variables**. It is not a secret, so it does not need to be stored as one.
+
+Use an OAuth app, not a GitHub App: OAuth app tokens do not expire, so the app
+has nothing to refresh. `MCP_GITHUB_CLIENT_ID` set when the app starts
+overrides the built-in value, which is useful in `npm run dev`.
+
 ## Runtime configuration
 
-OAuth client IDs and secrets are runtime configuration. Do not add them to the
+Notion's client ID and secret are runtime configuration. Do not add them to the
 installer, source tree, or renderer bundle. Configure these environment
 variables before starting the application:
 
-- `MCP_GITHUB_CLIENT_ID`
-- `MCP_GITHUB_CLIENT_SECRET`
 - `MCP_NOTION_CLIENT_ID`
 - `MCP_NOTION_CLIENT_SECRET`
 - `MCP_NOTION_DATABASE_ID`

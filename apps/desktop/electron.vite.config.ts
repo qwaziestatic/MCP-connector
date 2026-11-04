@@ -23,9 +23,19 @@ function productionContentSecurityPolicy(): Plugin {
   };
 }
 
+// Sign-in settings built into the main process. Neither is a secret (see
+// src/settings/sign-in-config.ts); set them when building the installer.
+const signInConfig = {
+  githubClientId: process.env.MCP_GITHUB_CLIENT_ID?.trim() ?? "",
+  notionSignInUrl: process.env.MCP_NOTION_SIGN_IN_URL?.trim() ?? ""
+};
+
 // Main and preload dependencies are externalized by default (build.externalizeDeps).
 export default defineConfig({
   main: {
+    define: {
+      __MCP_SIGN_IN__: JSON.stringify(signInConfig)
+    },
     build: {
       rollupOptions: {
         input: resolve(__dirname, "src/main.ts")

@@ -41,6 +41,10 @@ const desktopApi: DesktopApi = {
   credentials: {
     getStatus: () => ipcRenderer.invoke("credentials:get-status"),
     connect: (provider) => ipcRenderer.invoke("credentials:connect", provider),
+    startGitHub: () => ipcRenderer.invoke("credentials:github-start"),
+    openGitHub: () => ipcRenderer.invoke("credentials:github-open") as Promise<void>,
+    waitForGitHub: () => ipcRenderer.invoke("credentials:github-wait") as Promise<void>,
+    cancelGitHub: () => ipcRenderer.invoke("credentials:github-cancel") as Promise<void>,
     disconnect: (provider) => ipcRenderer.invoke("credentials:disconnect", provider)
   },
   mcp: {
