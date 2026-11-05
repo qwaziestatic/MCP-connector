@@ -89,9 +89,16 @@ interface Entry {
 
 function describeFailure(error: unknown, stderrTail: string | undefined): string {
   const message = error instanceof Error ? error.message : String(error);
-  const lastLine = stderrTail?.trim().split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1);
+  const lines = stderrTail?.trim().split(/\r?\n/).filter((line) => line.trim().length > 0) ?? [];
+  const lastLine = lines.at(-1);
   if (/ENOENT|not recognized|not found/i.test(message)) {
     return `The command could not be started (${message}). Check that it is installed and on PATH.`;
+  }
+  // On Windows commands run through cmd.exe, which reports a missing one on
+  // stderr and exits, so the error itself only says the connection closed.
+  const notRecognized = lines.find((line) => /is not recognized as an internal or external command/i.test(line));
+  if (notRecognized !== undefined) {
+    return `The command could not be started (${notRecognized.trim().replace(/,$/, "")}). Check that it is installed and on PATH.`;
   }
   if (/timed out/i.test(message)) {
     return "The server did not answer in time. If it downloads itself on first use, as npx does, "
