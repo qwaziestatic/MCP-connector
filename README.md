@@ -159,9 +159,17 @@ Mutating operations never execute silently. They follow this sequence:
 
 Filesystem access is limited to the workspace root explicitly selected by the
 user. MCP HTTP and VS Code listeners bind to loopback only and require
-per-launch bearer authentication.
+bearer authentication. To report a security problem, see
+[SECURITY.md](./SECURITY.md).
+
+## Privacy
+
+MCP Connector has no telemetry, analytics, or crash reporting, and no server of
+its own that sees your data. It talks only to the services you connect: GitHub,
+Notion (through the sign-in service, which passes tokens through without
+storing them), and the MCP servers you add. Your settings, approvals, and audit
+log stay on your computer.
 
 ## License
 
-This project is proprietary. See [LICENSE](./LICENSE) for redistribution and
-usage terms.
+MIT, copyright (c) 2026 Dagim Tsegaye. See [LICENSE](./LICENSE).

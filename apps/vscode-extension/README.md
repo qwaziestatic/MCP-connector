@@ -1,7 +1,6 @@
 # MCP Connector VS Code extension
 
-This package is proprietary software. Redistribution or modification requires
-written authorization from MCP Connector.
+Part of MCP Connector, released under the MIT License (see LICENSE).
 
 This optional extension sends active-editor context to a running MCP
 Connector desktop listener. It does not execute MCP tools or workflows.

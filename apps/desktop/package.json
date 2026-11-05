@@ -1,9 +1,15 @@
 {
   "name": "@mcp-connector/desktop",
   "version": "0.1.0",
+  "license": "MIT",
+  "author": "Dagim Tsegaye",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qwaziestatic/MCP-connector.git",
+    "directory": "apps/desktop"
+  },
   "private": true,
   "description": "Secure Windows desktop connector for local and cloud MCP tools.",
-  "author": "MCP Connector",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
