@@ -74,5 +74,5 @@ a real Windows machine, provider accounts, or release credentials.
 - [ ] Run `npm run package:skill` and upload `release/mcp-connector-skill.zip`
       to the skill marketplace only after the release is public, because the
       skill's setup steps link to it.
-- [ ] Confirm repository visibility and proprietary licensing are intentional.
+- [ ] Confirm the release is under the MIT License, as LICENSE says.
 - [ ] Announce the exact version and SHA-256 hashes of release artifacts.

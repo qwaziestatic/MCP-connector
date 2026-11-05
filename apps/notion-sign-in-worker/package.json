@@ -1,6 +1,13 @@
 {
   "name": "@mcp-connector/notion-sign-in-worker",
   "version": "0.1.0",
+  "license": "MIT",
+  "author": "Dagim Tsegaye",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qwaziestatic/MCP-connector.git",
+    "directory": "apps/notion-sign-in-worker"
+  },
   "private": true,
   "description": "Cloudflare Worker that keeps Notion's client secret out of the MCP Connector installer.",
   "type": "module",

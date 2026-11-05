@@ -1,7 +1,13 @@
 {
   "name": "mcp-connector-vscode",
   "version": "0.1.0",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "author": "Dagim Tsegaye",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qwaziestatic/MCP-connector.git",
+    "directory": "apps/vscode-extension"
+  },
   "publisher": "mcp-connector",
   "description": "Optional VS Code context client for MCP Connector.",
   "main": "./dist/extension.js",
