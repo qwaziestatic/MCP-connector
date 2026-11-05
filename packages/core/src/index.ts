@@ -2,6 +2,9 @@ export const CORE_PACKAGE_VERSION = "0.1.0";
 
 export * from "./connectors/index.js";
 export * from "./filesystem/filesystem.service.js";
+export * from "./gateway/external-server-config.js";
+export * from "./gateway/external-servers.js";
+export * from "./gateway/gateway-tools.js";
 export * from "./mcp/mcp-server.js";
 export * from "./mcp/http.js";
 export * from "./mcp/stdio-bridge.js";

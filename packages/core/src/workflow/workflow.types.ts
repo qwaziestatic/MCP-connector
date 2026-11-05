@@ -1,4 +1,5 @@
-export type WorkflowAction = "READ" | "CREATE" | "UPDATE" | "DELETE" | "UPLOAD";
+/** CALL: a call to another MCP server's tool, run once the user approves it. */
+export type WorkflowAction = "READ" | "CREATE" | "UPDATE" | "DELETE" | "UPLOAD" | "CALL";
 export type WorkflowStatus = "PREVIEWED" | "APPROVED" | "REJECTED" | "EXECUTING" | "EXECUTED" | "FAILED";
 export type WorkflowSource = "ui" | "mcp";
 
