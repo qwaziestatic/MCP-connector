@@ -35,7 +35,10 @@ jobs:
 
       - name: Set package version
         shell: pwsh
-        run: npm version "${{ inputs.version }}" --workspaces --include-workspace-root --no-git-tag-version
+        # Only what ships takes the release version: the app and the
+        # extension. The app depends on core's exact version, so changing
+        # core too makes npm look for that old version online, and fail.
+        run: npm version "${{ inputs.version }}" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
 
       - name: Generate Prisma client
         run: npm run prisma:generate
