@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { WorkflowPreviewState } from "@mcp-connector/core";
 import type { DesktopApi } from "./shared/desktop-api";
+import type { ExternalServerItem } from "./connection/external-server-store";
 
 const desktopApi: DesktopApi = {
   app: {
@@ -46,6 +47,18 @@ const desktopApi: DesktopApi = {
     cancelSignIn: (id) => ipcRenderer.invoke("connectors:cancel-sign-in", id) as Promise<void>,
     disconnect: (id) => ipcRenderer.invoke("connectors:disconnect", id) as Promise<void>,
     setSetting: (id, key, value) => ipcRenderer.invoke("connectors:set-setting", id, key, value)
+  },
+  external: {
+    list: () => ipcRenderer.invoke("external:list"),
+    add: (setup, approval) => ipcRenderer.invoke("external:add", setup, approval),
+    remove: (id) => ipcRenderer.invoke("external:remove", id),
+    reconnect: (id) => ipcRenderer.invoke("external:reconnect", id),
+    setApproval: (id, approval) => ipcRenderer.invoke("external:set-approval", id, approval),
+    subscribe: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, servers: readonly ExternalServerItem[]) => listener(servers);
+      ipcRenderer.on("external:changed", callback);
+      return () => ipcRenderer.removeListener("external:changed", callback);
+    }
   },
   mcp: {
     getStatus: () => ipcRenderer.invoke("mcp:get-status"),

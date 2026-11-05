@@ -6,6 +6,7 @@ import {
   createBuiltInConnectors,
   createNotionPagePreview,
   executeApprovedPreview,
+  ExternalServers,
   FilesystemService,
   PrismaAuditRepository,
   WorkflowService
@@ -13,6 +14,7 @@ import {
 import { CredentialVault } from "./security/credential-vault";
 import { ConnectorHub } from "./connection/connector-hub";
 import { ConnectorSettings } from "./connection/connector-settings";
+import { ExternalServerStore } from "./connection/external-server-store";
 import { createSignInFlow, createTokenRefresh } from "./connection/sign-in-kinds";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
@@ -31,6 +33,8 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const isDevelopment = process.env.NODE_ENV === "development";
 const filesystemService = new FilesystemService();
 let connections: AgentConnectionManager | null = null;
+// Other MCP servers the user added; their programs stop when the app quits.
+let externalServers: ExternalServers | null = null;
 let autoUpdateService: AutoUpdateService | null = null;
 // Problems found while starting, such as a busy port, shown once in the window.
 let startupProblems: readonly string[] = [];
@@ -71,6 +75,7 @@ function registerIpcHandlers(
   workflowService: WorkflowService,
   auditRepository: PrismaAuditRepository,
   connectorHub: ConnectorHub,
+  externalServerStore: ExternalServerStore,
   connectionManager: AgentConnectionManager,
   settings: AppSettingsStore
 ): void {
@@ -208,6 +213,15 @@ function registerIpcHandlers(
   ipcMain.handle("connectors:set-setting", (_event, id: unknown, key: unknown, value: unknown) =>
     connectorHub.setSetting(id, key, value));
 
+  // Other MCP servers: added from the setup in their README, and offered to
+  // agents with the same approvals.
+  ipcMain.handle("external:list", () => externalServerStore.list());
+  ipcMain.handle("external:add", (_event, setup: unknown, approval: unknown) => externalServerStore.add(setup, approval));
+  ipcMain.handle("external:remove", (_event, id: unknown) => externalServerStore.remove(id));
+  ipcMain.handle("external:reconnect", (_event, id: unknown) => externalServerStore.reconnect(id));
+  ipcMain.handle("external:set-approval", (_event, id: unknown, approval: unknown) =>
+    externalServerStore.setApproval(id, approval));
+
   ipcMain.handle("mcp:get-status", () => connectionManager.getMcpStatus());
   ipcMain.handle("mcp:start", () => connectionManager.startMcp());
   ipcMain.handle("mcp:stop", () => connectionManager.stopMcp());
@@ -334,10 +348,24 @@ async function startDesktopApp(): Promise<void> {
       createSignIn: (definition) => createSignInFlow(definition, credentialVault, (url) => shell.openExternal(url)),
       createRefresh: createTokenRefresh
     });
+    const servers = new ExternalServers({
+      clientVersion: app.getVersion(),
+      log: (message) => log.info(message)
+    });
+    externalServers = servers;
+    const externalServerStore = new ExternalServerStore({ settings, vault: credentialVault, servers });
+    servers.subscribe(() => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send("external:changed", externalServerStore.list());
+      }
+    });
+    // Each server connects on its own; a slow one does not delay the window.
+    void externalServerStore.start().catch((error: unknown) => log.error("Could not start the other MCP servers.", error));
     const getMcpDependencies = (): McpConnectorDependencies => ({
       filesystem: filesystemService,
       workflow: workflowService,
-      connectors: connectorHub.connectors
+      connectors: connectorHub.connectors,
+      external: servers
     });
     const connectionManager = new AgentConnectionManager({
       settings,
@@ -357,6 +385,7 @@ async function startDesktopApp(): Promise<void> {
       workflowService,
       auditRepository,
       connectorHub,
+      externalServerStore,
       connectionManager,
       settings
     );
@@ -434,5 +463,7 @@ if (isStdioMode()) {
     // Closing does not forget that the servers were running; they restart on the next launch.
     void connections?.closeAll();
     connections = null;
+    void externalServers?.close();
+    externalServers = null;
   });
 }
