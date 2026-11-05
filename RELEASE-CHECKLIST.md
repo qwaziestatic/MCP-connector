@@ -21,7 +21,7 @@ a real Windows machine, provider accounts, or release credentials.
 
 ## Signing and branding
 
-- [ ] Replace the default Electron icon with the approved `.ico` asset.
+- [x] Replace the default Electron icon (`apps/desktop/assets/icon.ico`).
 - [ ] Configure `CSC_LINK` and `CSC_KEY_PASSWORD` in a protected signing
       environment.
 - [ ] Run `npm run package:win:signed --workspace=@mcp-connector/desktop`.
@@ -66,6 +66,21 @@ a real Windows machine, provider accounts, or release credentials.
 - [ ] Verify an invalid or unavailable feed produces a visible error without
       blocking normal application startup.
 - [ ] Test rollback or recovery behavior before broad distribution.
+
+## Beta release (unsigned)
+
+1. In the repository's **Settings → Secrets and variables → Actions →
+   Variables**, check `MCP_GITHUB_CLIENT_ID`. Leave `MCP_NOTION_SIGN_IN_URL`
+   unset until the Notion sign-in service is deployed.
+2. Check `.github/release-notes.md`; it goes at the top of the release.
+3. **Actions → Build release artifacts → Run workflow**: version
+   `0.1.0-beta.1`, **prerelease** ticked.
+4. On a Windows machine, download the installer from the release, install it,
+   and check the icon, GitHub sign-in, **Start MCP server**, and one agent
+   connecting.
+5. If something is wrong, delete the release and its `v0.1.0-beta.1` tag on
+   GitHub, fix it, and run the workflow again.
+6. Then list the skill on the marketplace (below).
 
 ## GitHub distribution
 

@@ -23,10 +23,17 @@ The repository contains the feature-complete MVP implementation:
 - Authenticated VS Code context listener and companion extension
 - Windows NSIS installer and VSIX packaging
 
-The current Windows installer is an unsigned development/review artifact.
-Production distribution still requires Authenticode signing, approved
-branding, clean-machine validation, and real provider OAuth testing. See
-[DEPLOYMENT.md](./DEPLOYMENT.md) for release procedures and limitations.
+## Install
+
+Download the installer from
+[Releases](https://github.com/qwaziestatic/MCP-connector/releases) and run it
+(Windows 10 or 11, 64-bit). The beta is not code-signed yet, so Windows may
+say "Windows protected your PC": click **More info**, then **Run anyway**.
+Each release's notes walk through setting up an agent; the same steps are in
+[skills/mcp-connector/references/setup.md](./skills/mcp-connector/references/setup.md).
+
+To build and release it yourself, see [DEPLOYMENT.md](./DEPLOYMENT.md) and
+[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md).
 
 ## Requirements
 
