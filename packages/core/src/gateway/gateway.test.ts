@@ -181,6 +181,25 @@ describe("tools from other MCP servers", () => {
     });
     expect(external.connectedServers()).toEqual([]);
   });
+
+  it("explains a missing command that cmd.exe reports on stderr", async () => {
+    const external = new ExternalServers({
+      createTransport: () => ({
+        transport: {
+          start: async () => { throw new Error("MCP error -32000: Connection closed"); },
+          send: async () => undefined,
+          close: async () => undefined
+        },
+        stderrTail: () => "'nope' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n"
+      })
+    });
+    await external.set(notesConfig(), { env: {}, headers: {} });
+    expect(external.list()[0]?.state).toEqual({
+      status: "failed",
+      message: "The command could not be started ('nope' is not recognized as an internal or external command). "
+        + "Check that it is installed and on PATH."
+    });
+  });
 });
 
 describe("externalToolName", () => {
