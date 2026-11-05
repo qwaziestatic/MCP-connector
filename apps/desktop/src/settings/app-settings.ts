@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
+import { externalServerConfigSchema } from "@mcp-connector/core";
 
 // Non-secret settings that should survive a restart. Secrets belong in the
 // CredentialVault, never here. An invalid value drops only that setting.
@@ -17,7 +18,9 @@ const appSettingsSchema = z.object({
   /** Whether the VS Code listener was running when the app last closed. */
   vscodeListenerEnabled: z.boolean().optional().catch(undefined),
   /** Each connector's settings, by connector id and then setting key. */
-  connectorSettings: z.record(z.string(), z.record(z.string(), z.string())).optional().catch(undefined)
+  connectorSettings: z.record(z.string(), z.record(z.string(), z.string())).optional().catch(undefined),
+  /** Other MCP servers the user added. Their environment variables and headers are in the vault. */
+  externalServers: z.array(externalServerConfigSchema).optional().catch(undefined)
 });
 
 export type AppSettings = z.infer<typeof appSettingsSchema>;

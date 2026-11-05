@@ -17,7 +17,11 @@ export interface StoredCredential {
 type CredentialFile = Record<string, string>;
 
 /** Local secrets the app generates for itself, such as listener tokens. */
-export type LocalSecretName = "mcp-http-token" | "vscode-listener-token";
+export type LocalSecretName =
+  | "mcp-http-token"
+  | "vscode-listener-token"
+  /** An external MCP server's environment variables and headers, as JSON. */
+  | `external-server:${string}`;
 
 /** The part of the vault that stores the app's own secrets. */
 export interface LocalSecretStore {
@@ -112,6 +116,15 @@ export class CredentialVault implements LocalSecretStore {
       await this.saveSecret(name, decrypted.result);
     }
     return decrypted.result;
+  }
+
+  async removeSecret(name: LocalSecretName): Promise<void> {
+    this.assertWritable();
+    await this.enqueueWrite(async () => {
+      const contents = await this.readFile();
+      delete contents[`secret:${name}`];
+      await this.writeFile(contents);
+    });
   }
 
   async saveSecret(name: LocalSecretName, value: string): Promise<void> {

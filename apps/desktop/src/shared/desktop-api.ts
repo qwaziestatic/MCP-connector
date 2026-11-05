@@ -1,6 +1,7 @@
 import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { ConnectorView } from "../connection/connector-hub";
+import type { ExternalServerItem } from "../connection/external-server-store";
 import type { SignInPrompt } from "../security/sign-in-flow";
 
 export interface ListenerStatus {
@@ -94,6 +95,17 @@ export interface DesktopApi {
     readonly disconnect: (id: string) => Promise<void>;
     /** Saves a setting from what the user typed; an empty value clears it. */
     readonly setSetting: (id: string, key: string, value: string) => Promise<ConnectorView>;
+  };
+  /** Other MCP servers the user added, offered to agents with the same approvals. */
+  readonly external: {
+    readonly list: () => Promise<readonly ExternalServerItem[]>;
+    /** Adds the servers in a pasted "mcpServers" setup. */
+    readonly add: (setup: string, approval: "changes" | "all") => Promise<readonly ExternalServerItem[]>;
+    readonly remove: (id: string) => Promise<readonly ExternalServerItem[]>;
+    readonly reconnect: (id: string) => Promise<readonly ExternalServerItem[]>;
+    readonly setApproval: (id: string, approval: "changes" | "all") => Promise<readonly ExternalServerItem[]>;
+    /** Called whenever a server connects, stops, or changes its tools. */
+    readonly subscribe: (listener: (servers: readonly ExternalServerItem[]) => void) => () => void;
   };
   readonly mcp: {
     readonly getStatus: () => Promise<ListenerStatus>;

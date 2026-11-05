@@ -59,6 +59,14 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .connector-setting-row { display: flex; gap: 10px; }
 .connector-setting-row input { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid #304862; border-radius: 7px; background: #0b1524; color: #e5edf5; }
 .connector-setting p { margin: 6px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.connector-setting textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #304862; border-radius: 7px; background: #0b1524; color: #e5edf5; font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+.connector-setting select, .external-server-actions select { padding: 9px 10px; border: 1px solid #304862; border-radius: 7px; background: #0b1524; color: #e5edf5; }
+.external-server-add { margin-top: 20px; }
+.external-server-summary { min-width: 0; }
+.external-server-summary code { color: #aed2f3; overflow-wrap: anywhere; }
+.external-server-failed { color: #ffb4bf; }
+.external-server-tools { overflow-wrap: anywhere; }
+.external-server-actions { flex-shrink: 0; margin-top: 0; }
 .device-code { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 14px; padding: 16px; border: 1px solid #2c5a8a; border-radius: 10px; background: #0f2036; }
 .device-code p { margin: 0; }
 .device-code p + p { margin-top: 6px; }

@@ -77,6 +77,37 @@ npm run package:vscode
 The generated installer, VSIX, and other build artifacts are ignored by Git.
 Publish them as release assets rather than committing them to the source tree.
 
+## Other MCP servers
+
+MCP Connector can stand in front of other MCP servers, so their tools get the
+same approval screen and audit log as its own. Under **Other MCP servers** in
+the app, paste the `"mcpServers"` block from a server's README, for example:
+
+```json
+{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Projects"]
+    }
+  }
+}
+```
+
+- Agents see each tool as `<server>__<tool>`, for example `files__read_file`,
+  with the server's own parameters.
+- Tools the server marks read-only run at once. Every other call returns a
+  preview; once you approve it, the agent runs it with
+  `external_run_approved_call`. Set a server to **Ask before every tool** to
+  approve everything it does.
+- Programs (`"command"`) and streamable HTTP servers (`"url"`) are supported;
+  the older SSE transport is not.
+- `"env"` values and `"headers"` are kept in the encrypted vault, not in
+  `settings.json`. A program gets only the usual environment (PATH, the user
+  folders, and proxy settings) plus its own variables.
+- MCP Connector starts the command you paste, so add only servers you trust.
+  Servers started with `npx` need Node.js installed.
+
 ## Agent skill
 
 `skills/mcp-connector` is an agent skill in the open `SKILL.md` format. It

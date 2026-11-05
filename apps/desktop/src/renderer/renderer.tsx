@@ -8,6 +8,7 @@ import type {
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { AgentConfigs } from "../shared/desktop-api";
 import { ConnectionsCard } from "./connections-card";
+import { ExternalServersCard } from "./external-servers-card";
 
 /** Agents that connect over HTTP, in the order their buttons appear. */
 const httpAgents: readonly { readonly key: keyof AgentConfigs; readonly name: string }[] = [
@@ -450,6 +451,8 @@ export function App(): JSX.Element {
         copyText={async (label, value) => copyValue(label, value)}
         copied={copied}
       />
+
+      <ExternalServersCard onError={setError} />
 
       <section className="card integrations-card">
         <div className="card-heading">
