@@ -54,10 +54,12 @@
   "build": {
     "appId": "com.mcpconnector.desktop",
     "productName": "MCP Connector",
+    "copyright": "Copyright © 2026 Dagim Tsegaye",
     "asar": true,
     "npmRebuild": false,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "assets"
     },
     "files": [
       "out/**/*",
@@ -69,8 +71,18 @@
         "to": "node_modules/.prisma/client"
       }
     ],
+    "extraResources": [
+      {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
     "win": {
-      "signAndEditExecutable": false,
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -88,7 +100,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "MCP Connector",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
     }
   }
 }

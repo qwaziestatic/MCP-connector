@@ -283,6 +283,11 @@ function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 960,
     minHeight: 640,
+    // The packaged app has the icon in its executable too; this covers
+    // npm run dev and the taskbar on every system.
+    icon: app.isPackaged
+      ? join(process.resourcesPath, "icon.png")
+      : join(app.getAppPath(), "assets", "icon.png"),
     webPreferences: {
       preload: join(currentDirectory, "../preload/preload.js"),
       contextIsolation: true,
