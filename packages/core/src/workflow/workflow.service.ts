@@ -10,7 +10,7 @@ import type {
   WorkflowStatus
 } from "./workflow.types.js";
 
-const actionSchema = z.enum(["READ", "CREATE", "UPDATE", "DELETE", "UPLOAD"]);
+const actionSchema = z.enum(["READ", "CREATE", "UPDATE", "DELETE", "UPLOAD", "CALL"]);
 
 interface PendingWorkflow {
   readonly preview: WorkflowPreview;

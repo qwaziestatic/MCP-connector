@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ConnectedConnector } from "../connectors/connector-definition.js";
 import { FilesystemService } from "../filesystem/filesystem.service.js";
+import type { ExternalToolSource } from "../gateway/external-servers.js";
+import { registerExternalTools } from "../gateway/gateway-tools.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
 import { result } from "./tool-result.js";
 import { z } from "zod";
@@ -11,6 +13,8 @@ export interface McpConnectorDependencies {
   readonly workflow: WorkflowService;
   /** Each service's definition and how its tools reach it; each adds its own tools. */
   readonly connectors?: readonly ConnectedConnector[];
+  /** Other MCP servers the user connected; their tools are offered as `<server>__<tool>`. */
+  readonly external?: ExternalToolSource;
 }
 
 export function createMcpServer(dependencies: McpConnectorDependencies): McpServer {
@@ -89,6 +93,11 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
   for (const { definition, runtime } of dependencies.connectors ?? []) {
     definition.registerTools(server, { runtime, workflow: dependencies.workflow });
   }
+
+  registerExternalTools(server, {
+    workflow: dependencies.workflow,
+    ...(dependencies.external === undefined ? {} : { external: dependencies.external })
+  });
 
   return server;
 }

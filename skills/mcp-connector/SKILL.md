@@ -61,4 +61,17 @@ Each service is connected in the app, under **Secure provider connections**.
 If a tool says a service is not connected, or needs a setting, pass its
 message on: the user fixes both in the app, next to the service.
 
+## Tools from other MCP servers
+
+The user can connect other MCP servers through MCP Connector. Their tools
+appear as `<server>__<tool>`, for example `files__read_file`.
+
+- Tools the server marks read-only run at once and return its result.
+- Every other tool returns a **preview** instead and changes nothing. Follow
+  the approval steps above, then call `external_run_approved_call` with the
+  `previewId`. It runs exactly the approved arguments, once, and returns the
+  server's result.
+- If a server is not connected, ask the user to click **Reconnect** next to
+  it in MCP Connector, under **Other MCP servers**.
+
 All tools and their inputs are in [references/tools.md](references/tools.md).
