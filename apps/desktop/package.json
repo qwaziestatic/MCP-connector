@@ -14,8 +14,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && npm run verify-build",
-    "package:win": "npm run build && electron-builder --win",
-    "package:win:signed": "npm run build && electron-builder --win --config electron-builder.signed.yml",
+    "package:win": "npm run build && electron-builder --win --publish never",
+    "package:win:signed": "npm run build && electron-builder --win --config electron-builder.signed.yml --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify-build": "node scripts/verify-build.mjs",
     "smoke-test": "node scripts/smoke-test.mjs",
