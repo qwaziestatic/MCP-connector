@@ -180,3 +180,6 @@ log stay on your computer.
 ## License
 
 MIT, copyright (c) 2026 Dagim Tsegaye. See [LICENSE](./LICENSE).
+
+The MCP Connector name and cloud mascot are not covered by the MIT License;
+forks should use their own icon.
