@@ -24,5 +24,7 @@ Claude Code, `%USERPROFILE%\.claude\skills`).
 
 ## Known limits
 
+- Notion sign-in isn't available yet; it comes in a later release. GitHub
+  sign-in and the other MCP servers you add work now.
 - No automatic updates yet: download new versions from this page.
 - MCP servers you add with `npx` need Node.js installed.
