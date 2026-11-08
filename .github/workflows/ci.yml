@@ -50,7 +50,8 @@ jobs:
         run: npm audit --audit-level=high
 
   # The code and tests must also pass on Linux and macOS: a Windows-only CI
-  # once hid a test that failed everywhere else. Packaging stays Windows-only.
+  # once hid a test that failed everywhere else. Packaging is tested below,
+  # for Windows and Linux.
   cross-platform:
     strategy:
       fail-fast: false
@@ -112,3 +113,59 @@ jobs:
 
       - name: Launch the packaged app
         run: npm run smoke-test --workspace=@mcp-connector/desktop
+
+  # Builds the AppImage and .deb and launches each of them, with a virtual
+  # display and an unlocked GNOME Keyring, so the vault and stdio checks run
+  # for real. The packages are kept, to try on a real Linux PC before a release.
+  package-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # xvfb, dbus and gnome-keyring for the smoke test's session; libfuse2t64
+      # lets the AppImage run.
+      - name: Install the smoke test's system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb dbus gnome-keyring libfuse2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Build core package
+        run: npm run build --workspace=@mcp-connector/core
+
+      - name: Build Linux packages
+        run: npm run package:linux
+        env:
+          # The public GitHub OAuth client ID, so these test builds can sign
+          # in to GitHub like a release. See DEPLOYMENT.md, "Sign-in setup".
+          MCP_GITHUB_CLIENT_ID: ${{ vars.MCP_GITHUB_CLIENT_ID }}
+
+      # The .deb as installed, the AppImage, and the unpacked build. Ubuntu's
+      # runners restrict unprivileged user namespaces through AppArmor, which
+      # Chromium's sandbox needs: the .deb and AppImage runs keep that
+      # restriction, and the script lifts it, on the runner only, for the
+      # unpacked build, which no AppArmor profile covers.
+      - name: Launch the packaged apps
+        run: apps/desktop/scripts/smoke-test-linux.sh
+
+      - name: Upload the Linux packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            apps/desktop/release/MCP-Connector-*.AppImage
+            apps/desktop/release/MCP-Connector-*.deb
+          if-no-files-found: error
