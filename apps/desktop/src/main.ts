@@ -26,6 +26,7 @@ import { isStdioMode, runStdioMode, STDIO_FLAG, useRelayProfile } from "./stdio/
 import { createFileLogger } from "./logging/file-logger";
 import { describeStartupError } from "./logging/startup-error";
 import { createApprovalNotifier } from "./notifications/approval-notifier";
+import { NO_SANDBOX_SWITCH, sandboxRefusal } from "./security/sandbox-check";
 import type { McpConnectorDependencies, WorkflowPreview } from "@mcp-connector/core";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -434,7 +435,26 @@ async function startDesktopApp(): Promise<void> {
   });
 }
 
-if (isStdioMode()) {
+// Checked before anything else starts: the app never runs with Chromium's
+// sandbox off (see security/sandbox-check.ts).
+const unsandboxed = sandboxRefusal({
+  noSandbox: app.commandLine.hasSwitch(NO_SANDBOX_SWITCH),
+  appImagePath: process.platform === "linux" ? process.env.APPIMAGE : undefined
+});
+
+if (unsandboxed !== null) {
+  if (isStdioMode()) {
+    // An agent started the relay; it reads stderr, and nobody may be watching a window.
+    process.stderr.write(`${unsandboxed.title}. ${unsandboxed.message.replace(/\s*\n+\s*/gu, " ")}\n`);
+    app.exit(1);
+  } else {
+    // After ready, so Linux shows a dialog rather than printing to a hidden terminal.
+    void app.whenReady().then(() => {
+      dialog.showErrorBox(unsandboxed.title, unsandboxed.message);
+      app.exit(1);
+    });
+  }
+} else if (isStdioMode()) {
   // No window and no database: only relay an agent's stdio to the running app.
   // Keep this path free of any single-instance lock, which would refuse to
   // start while the app is open.
