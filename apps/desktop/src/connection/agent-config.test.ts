@@ -1,5 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentConfigs } from "./agent-config";
+import { buildAgentConfigs, stdioCommand } from "./agent-config";
+
+describe("stdioCommand", () => {
+  const execPath = "/tmp/.mount_MCP-CoAbC123/mcp-connector";
+
+  it("uses the AppImage file, which stays put, instead of its temporary mount", () => {
+    expect(stdioCommand({
+      execPath,
+      platform: "linux",
+      env: { APPIMAGE: "/home/leul/Applications/MCP-Connector-0.2.0-x86_64.AppImage" }
+    })).toBe("/home/leul/Applications/MCP-Connector-0.2.0-x86_64.AppImage");
+  });
+
+  it("uses the executable itself outside an AppImage, such as the .deb's", () => {
+    expect(stdioCommand({ execPath: "/opt/MCP Connector/mcp-connector", platform: "linux", env: {} }))
+      .toBe("/opt/MCP Connector/mcp-connector");
+    expect(stdioCommand({ execPath: "/opt/MCP Connector/mcp-connector", platform: "linux", env: { APPIMAGE: "" } }))
+      .toBe("/opt/MCP Connector/mcp-connector");
+  });
+
+  it("ignores APPIMAGE on Windows", () => {
+    const exe = "C:\\Users\\leul\\AppData\\Local\\Programs\\MCP Connector\\MCP Connector.exe";
+    expect(stdioCommand({ execPath: exe, platform: "win32", env: { APPIMAGE: "/somewhere/else.AppImage" } })).toBe(exe);
+  });
+
+  it("quotes an AppImage path with spaces in the Claude Code command", () => {
+    const command = stdioCommand({ execPath, platform: "linux", env: { APPIMAGE: "/home/leul/My Apps/MCP.AppImage" } });
+    const configs = buildAgentConfigs({
+      url: "http://127.0.0.1:47820/mcp",
+      bearerToken: "abc",
+      platform: "linux",
+      stdio: { command, args: ["--mcp-stdio"] }
+    });
+    expect(configs.claudeCodeStdio).toBe("claude mcp add --transport stdio mcp-connector -- '/home/leul/My Apps/MCP.AppImage' --mcp-stdio");
+  });
+});
 
 describe("buildAgentConfigs", () => {
   const endpoint = { url: "http://127.0.0.1:47820/mcp", bearerToken: "abc_DEF-123" };

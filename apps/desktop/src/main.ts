@@ -18,7 +18,7 @@ import { ExternalServerStore } from "./connection/external-server-store";
 import { createSignInFlow, createTokenRefresh } from "./connection/sign-in-kinds";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
-import { buildAgentConfigs } from "./connection/agent-config";
+import { buildAgentConfigs, stdioCommand } from "./connection/agent-config";
 import { AutoUpdateService } from "./updater/auto-update.service";
 import { buildContentSecurityPolicy, developmentRendererOrigin } from "./security/content-security-policy";
 import { AppSettingsStore } from "./settings/app-settings";
@@ -233,10 +233,11 @@ function registerIpcHandlers(
     }
     // The stdio command must point at the installed app, so it is only
     // offered in a packaged build, not in `npm run dev`.
+    const command = stdioCommand({ execPath: process.execPath, platform: process.platform, env: process.env });
     return buildAgentConfigs({
       url: status.url,
       bearerToken: status.bearerToken,
-      ...(app.isPackaged ? { stdio: { command: process.execPath, args: [STDIO_FLAG] } } : {}),
+      ...(app.isPackaged ? { stdio: { command, args: [STDIO_FLAG] } } : {}),
       platform: process.platform
     });
   });
