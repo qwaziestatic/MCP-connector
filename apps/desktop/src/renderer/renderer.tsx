@@ -7,6 +7,7 @@ import type {
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { AgentConfigs } from "../shared/desktop-api";
+import { describeAuditRecord } from "./audit-description";
 import { ConnectionsCard, ipcErrorMessage } from "./connections-card";
 import { ExternalServersCard } from "./external-servers-card";
 
@@ -637,19 +638,25 @@ export function App(): JSX.Element {
           <p className="muted">No audit records match the current filters.</p>
         ) : (
           <div className="audit-list">
-            {filteredAuditRecords.slice(0, 50).map((record) => (
-              <div className="audit-entry" key={record.id}>
-                <button className="audit-row" onClick={() => setExpandedAuditId(expandedAuditId === record.id ? null : record.id)}>
-                <span className={`status ${record.status.toLowerCase()}`}>{record.status}</span>
-                <strong>{record.action}</strong>
-                <span>{record.target}</span>
-                <time>{formatDate(record.createdAt)}</time>
-                </button>
-                {expandedAuditId === record.id && (
-                  <pre className="audit-details">{record.previewJson}</pre>
-                )}
-              </div>
-            ))}
+            {filteredAuditRecords.slice(0, 50).map((record) => {
+              const description = describeAuditRecord(record);
+              return (
+                <div className="audit-entry" key={record.id}>
+                  <button className="audit-row" onClick={() => setExpandedAuditId(expandedAuditId === record.id ? null : record.id)}>
+                    <span className={`status ${record.status.toLowerCase()}`}>{record.status}</span>
+                    <strong>{record.action}</strong>
+                    <span className="audit-summary">
+                      <span className="audit-target">{record.target}</span>
+                      {description !== null && <span className="audit-description" title={description}>{description}</span>}
+                    </span>
+                    <time>{formatDate(record.createdAt)}</time>
+                  </button>
+                  {expandedAuditId === record.id && (
+                    <pre className="audit-details">{record.previewJson}</pre>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

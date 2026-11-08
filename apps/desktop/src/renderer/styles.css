@@ -49,7 +49,12 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .audit-row { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .audit-row:hover { background: rgba(40, 120, 200, .08); }
 .audit-details { margin: 0 0 10px; max-height: 180px; }
-.file-row span:first-child, .audit-row span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-row strong, .audit-row time { flex-shrink: 0; }
+.audit-row strong { min-width: 56px; }
+.audit-summary { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 7px 0; }
+.audit-target, .audit-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-description { color: #91a4ba; font-size: 11px; }
 .preview { margin-top: 28px; }
 .integration-list { margin-top: 20px; }
 .integration-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #263a54; }
@@ -93,5 +98,6 @@ pre { max-height: 220px; overflow: auto; padding: 14px; border-radius: 8px; back
 .status.previewed { background: #3c3b26; color: #e7d87e; }
 .status.approved { background: #1c4a38; color: #8de2b5; }
 .status.rejected { background: #4a2931; color: #efa2ad; }
+.status.executed { background: #1d3f63; color: #9fcdfb; }
 .status.failed { background: #632f26; color: #ffae9a; }
 @media (max-width: 1050px) { .app-shell { padding: 30px; } .grid { grid-template-columns: 1fr; } }
