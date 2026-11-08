@@ -19,16 +19,18 @@ function value(text: string | undefined): string | undefined {
   return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
 }
 
+export const GITHUB_SIGN_IN_MISSING_MESSAGE = "This copy was built without GitHub sign-in (a development build). "
+  + "Install MCP Connector from the GitHub Releases page.";
+
 export function readGitHubClientId(
   env: NodeJS.ProcessEnv = process.env,
   defaults: BuiltInSignInConfig | undefined = builtIn
 ): string {
   const clientId = value(env.MCP_GITHUB_CLIENT_ID) ?? value(defaults?.githubClientId);
   if (clientId === undefined) {
-    throw new Error(
-      "GitHub sign-in is not set up in this copy of MCP Connector: it was built without a GitHub "
-      + "OAuth app client ID. See \"Sign-in setup\" in DEPLOYMENT.md."
-    );
+    // Every release has the client ID built in, so only a development build
+    // lacks it. The person seeing this wants a working copy, not build steps.
+    throw new Error(GITHUB_SIGN_IN_MISSING_MESSAGE);
   }
   return clientId;
 }

@@ -16,8 +16,22 @@ describe("sign-in config", () => {
   });
 
   it("explains a build without sign-in settings", () => {
-    expect(() => readGitHubClientId({ MCP_GITHUB_CLIENT_ID: "  " }, { githubClientId: "" })).toThrow("GitHub sign-in is not set up");
     expect(() => readNotionSignInUrl({}, undefined)).toThrow("Notion sign-in is not set up");
+  });
+
+  it("tells a user of a development build to install a release for GitHub sign-in", () => {
+    const message = (() => {
+      try {
+        readGitHubClientId({ MCP_GITHUB_CLIENT_ID: "  " }, { githubClientId: "" });
+        return "";
+      } catch (error) {
+        return (error as Error).message;
+      }
+    })();
+    expect(message).toBe(
+      "This copy was built without GitHub sign-in (a development build). Install MCP Connector from the GitHub Releases page."
+    );
+    expect(message).not.toContain("DEPLOYMENT.md");
   });
 
   it("says whether Notion sign-in is built in or set by the environment", () => {
