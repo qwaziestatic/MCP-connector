@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readGitHubClientId, readNotionSignInUrl } from "./sign-in-config";
+import { hasNotionSignInUrl, readGitHubClientId, readNotionSignInUrl } from "./sign-in-config";
 
 const builtIn = { githubClientId: "Ov23li-built", notionSignInUrl: "https://sign-in.example.workers.dev/" };
 
@@ -18,6 +18,13 @@ describe("sign-in config", () => {
   it("explains a build without sign-in settings", () => {
     expect(() => readGitHubClientId({ MCP_GITHUB_CLIENT_ID: "  " }, { githubClientId: "" })).toThrow("GitHub sign-in is not set up");
     expect(() => readNotionSignInUrl({}, undefined)).toThrow("Notion sign-in is not set up");
+  });
+
+  it("says whether Notion sign-in is built in or set by the environment", () => {
+    expect(hasNotionSignInUrl({}, builtIn)).toBe(true);
+    expect(hasNotionSignInUrl({ MCP_NOTION_SIGN_IN_URL: "http://127.0.0.1:8787" }, undefined)).toBe(true);
+    expect(hasNotionSignInUrl({ MCP_NOTION_SIGN_IN_URL: " " }, { notionSignInUrl: "" })).toBe(false);
+    expect(hasNotionSignInUrl({}, undefined)).toBe(false);
   });
 
   it("refuses a Notion sign-in address that is not https", () => {

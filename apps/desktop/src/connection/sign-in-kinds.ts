@@ -11,7 +11,23 @@ import { GitHubSignIn } from "../security/github-sign-in";
 import { NotionSignIn } from "../security/notion-sign-in";
 import { OAuthCallbackServer } from "../security/oauth-callback-server";
 import type { SignInFlow } from "../security/sign-in-flow";
-import { readGitHubClientId, readNotionSignInUrl } from "../settings/sign-in-config";
+import { hasNotionSignInUrl, readGitHubClientId, readNotionSignInUrl } from "../settings/sign-in-config";
+
+/**
+ * Whether this copy can sign in to a definition's service at all. Notion signs
+ * in through a sign-in service that releases ship without until it is
+ * deployed, so the window says Notion sign-in comes later instead of offering
+ * a Connect button that fails. Every release has GitHub's client ID; a copy
+ * without one is a development build, and Connect says so.
+ */
+export function isSignInAvailable(definition: ConnectorDefinition, env: NodeJS.ProcessEnv = process.env): boolean {
+  switch (definition.signIn.kind) {
+    case "github-device-flow":
+      return true;
+    case "notion-sign-in-service":
+      return hasNotionSignInUrl(env);
+  }
+}
 
 export function createSignInFlow(
   definition: ConnectorDefinition,

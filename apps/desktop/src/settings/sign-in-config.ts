@@ -33,6 +33,14 @@ export function readGitHubClientId(
   return clientId;
 }
 
+/** Whether this copy has a Notion sign-in service address, valid or not. */
+export function hasNotionSignInUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  defaults: BuiltInSignInConfig | undefined = builtIn
+): boolean {
+  return (value(env.MCP_NOTION_SIGN_IN_URL) ?? value(defaults?.notionSignInUrl)) !== undefined;
+}
+
 /** Accepts https URLs, and plain http only on this computer (for `wrangler dev`). */
 export function readNotionSignInUrl(
   env: NodeJS.ProcessEnv = process.env,

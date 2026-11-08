@@ -95,6 +95,8 @@ export function App(): JSX.Element {
     message: null
   });
   const [copied, setCopied] = useState<string | null>(null);
+  // Hidden until the connector list says this copy can sign in to Notion.
+  const [notionSignInAvailable, setNotionSignInAvailable] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +132,13 @@ export function App(): JSX.Element {
   }, []);
 
   useEffect(() => window.desktopApi.workflow.subscribe(setPendingPreviews), []);
+
+  useEffect(() => {
+    void window.desktopApi.connectors.list()
+      .then((connectors) => setNotionSignInAvailable(connectors.some((connector) => connector.id === "notion" && connector.signInAvailable)))
+      // The connections card reports a failure to load the connectors.
+      .catch(() => undefined);
+  }, []);
 
   // Show the workspace remembered from an earlier session.
   useEffect(() => {
@@ -378,9 +387,11 @@ export function App(): JSX.Element {
                 <div><strong>{snapshot.entries.filter((entry) => entry.type === "directory").length}</strong><span>Directories</span></div>
                 <div><strong>{snapshot.readme === null ? "No" : "Yes"}</strong><span>README</span></div>
               </div>
-              <button className="button primary" onClick={() => void createNotionPreview()} disabled={busy}>
-                Preview Notion page creation
-              </button>
+              {notionSignInAvailable && (
+                <button className="button primary" onClick={() => void createNotionPreview()} disabled={busy}>
+                  Preview Notion page creation
+                </button>
+              )}
               <div className="file-list">
                 {snapshot.entries.slice(0, 12).map((entry) => (
                   <div className="file-row" key={entry.relativePath}>

@@ -16,6 +16,8 @@ export interface ConnectorView {
   readonly name: string;
   readonly description: string;
   readonly signIn: ConnectorSignIn["kind"];
+  /** False when this copy cannot sign in to the service yet; the window says it comes later. */
+  readonly signInAvailable: boolean;
   readonly connected: boolean;
   readonly settings: readonly {
     readonly key: string;
@@ -42,6 +44,8 @@ export interface ConnectorHubOptions {
   readonly createSignIn: (definition: ConnectorDefinition) => SignInFlow;
   /** How a definition's tokens renew, or null when they cannot. */
   readonly createRefresh: (definition: ConnectorDefinition) => ((refreshToken: string) => Promise<OAuthTokenSet>) | null;
+  /** Whether this copy can sign in to a definition's service at all. Every one can when left out. */
+  readonly isSignInAvailable?: (definition: ConnectorDefinition) => boolean;
 }
 
 /** Every connector the app offers, with its sign-in, settings, and tools' runtime. */
@@ -116,6 +120,7 @@ export class ConnectorHub {
       name: definition.name,
       description: definition.description,
       signIn: definition.signIn.kind,
+      signInAvailable: this.options.isSignInAvailable?.(definition) ?? true,
       connected: await this.options.vault.has(definition.id),
       settings: definition.settings.map((setting) => {
         const current = this.options.settings.get(definition, setting.key);

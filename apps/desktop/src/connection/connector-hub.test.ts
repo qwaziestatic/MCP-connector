@@ -16,7 +16,7 @@ afterEach(async () => {
 
 const databaseId = "1a2b3c4d5e6f40718293a4b5c6d7e8f9";
 
-async function setUp(env: NodeJS.ProcessEnv = {}) {
+async function setUp(env: NodeJS.ProcessEnv = {}, isSignInAvailable?: (definition: ConnectorDefinition) => boolean) {
   const directory = await mkdtemp(join(tmpdir(), "mcp-connectors-"));
   directories.push(directory);
   const settingsPath = join(directory, "settings.json");
@@ -44,7 +44,8 @@ async function setUp(env: NodeJS.ProcessEnv = {}) {
     vault,
     settings: await ConnectorSettings.load(new AppSettingsStore(settingsPath), env),
     createSignIn,
-    createRefresh: () => null
+    createRefresh: () => null,
+    ...(isSignInAvailable === undefined ? {} : { isSignInAvailable })
   });
   return { hub, settingsPath, started };
 }
@@ -59,6 +60,16 @@ describe("ConnectorHub", () => {
       ["notion", "notion-sign-in-service", false]
     ]);
     expect(list[1]?.settings).toEqual([expect.objectContaining({ key: "databaseId", label: "Database for new pages", value: null, source: null })]);
+  });
+
+  it("says which connectors this copy can sign in to", async () => {
+    expect((await (await setUp()).hub.list()).map((connector) => connector.signInAvailable)).toEqual([true, true]);
+
+    const { hub } = await setUp({}, (definition) => definition.id !== "notion");
+    expect((await hub.list()).map((connector) => [connector.id, connector.signInAvailable])).toEqual([
+      ["github", true],
+      ["notion", false]
+    ]);
   });
 
   it("signs in and out through the connector's own flow", async () => {

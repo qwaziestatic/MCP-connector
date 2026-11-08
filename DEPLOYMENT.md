@@ -134,7 +134,9 @@ npm run package:win
 
 For the release workflow, add a repository variable named
 `MCP_NOTION_SIGN_IN_URL`, next to `MCP_GITHUB_CLIENT_ID`. The address is not a
-secret. `MCP_NOTION_SIGN_IN_URL` set when the app starts overrides the built-in
+secret. Until a copy has it, the app shows "Notion sign-in is coming in a later
+version" instead of Notion's Connect button and database field, and hides the
+workspace's "Preview Notion page creation". `MCP_NOTION_SIGN_IN_URL` set when the app starts overrides the built-in
 value; `http://127.0.0.1:8787` works with `npm run dev` in the Worker's folder.
 
 ## Runtime configuration
