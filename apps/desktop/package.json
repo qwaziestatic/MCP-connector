@@ -9,13 +9,15 @@
     "directory": "apps/desktop"
   },
   "private": true,
-  "description": "Secure Windows desktop connector for local and cloud MCP tools.",
+  "description": "Secure desktop connector for local and cloud MCP tools.",
   "main": "out/main/main.js",
+  "desktopName": "mcp-connector.desktop",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && npm run verify-build",
     "package:win": "npm run build && electron-builder --win --publish never",
     "package:win:signed": "npm run build && electron-builder --win --config electron-builder.signed.yml --publish never",
+    "package:linux": "npm run build && electron-builder --linux --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify-build": "node scripts/verify-build.mjs",
     "smoke-test": "node scripts/smoke-test.mjs",
@@ -104,6 +106,42 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "Development",
+      "executableName": "mcp-connector",
+      "syncDesktopName": true,
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "MCP-Connector-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "maintainer": "Dagim Tsegaye <139397610+qwaziestatic@users.noreply.github.com>",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2t64 | libasound2"
+      ]
     }
   }
 }

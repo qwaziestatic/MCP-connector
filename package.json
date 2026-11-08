@@ -8,7 +8,7 @@
     "url": "https://github.com/qwaziestatic/MCP-connector.git"
   },
   "private": true,
-  "description": "Secure Windows desktop integration platform exposing local app contexts and cloud APIs as MCP tools.",
+  "description": "Secure desktop integration platform for Windows and Linux, exposing local app contexts and cloud APIs as MCP tools.",
   "packageManager": "npm@11.0.0",
   "workspaces": [
     "apps/*",
@@ -18,6 +18,7 @@
     "dev": "npm run dev --workspace=@mcp-connector/desktop",
     "build": "npm run build --workspace=@mcp-connector/core && npm run build --workspace=@mcp-connector/desktop && npm run build --workspace=apps/vscode-extension",
     "package:win": "npm run package:win --workspace=@mcp-connector/desktop",
+    "package:linux": "npm run package:linux --workspace=@mcp-connector/desktop",
     "typecheck": "npm run build --workspace=@mcp-connector/core && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
