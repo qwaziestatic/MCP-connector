@@ -80,7 +80,7 @@ export function ExternalServersCard({ onError }: ExternalServersCardProps): JSX.
           <p className="eyebrow">OTHER MCP SERVERS</p>
           <h2>Tools from other MCP servers</h2>
         </div>
-        <span className="muted">Their keys stay in Windows-protected storage.</span>
+        <span className="muted">Their keys stay in your system&apos;s protected storage.</span>
       </div>
       <p className="muted">
         Agents see these servers&apos; tools through MCP Connector, as &lt;server&gt;__&lt;tool&gt;. Tools a server

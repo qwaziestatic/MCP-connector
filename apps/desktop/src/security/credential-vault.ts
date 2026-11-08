@@ -29,6 +29,31 @@ export interface LocalSecretStore {
   saveSecret(name: LocalSecretName, value: string): Promise<void>;
 }
 
+export const NO_LINUX_KEYRING_MESSAGE = "MCP Connector needs your system's keyring to keep tokens safe, and none is "
+  + "available. Install or unlock GNOME Keyring or KWallet, then restart MCP Connector.";
+
+/**
+ * Why secrets cannot be kept safely right now, written for the user, or null
+ * when they can. On Linux, safeStorage relies on a keyring (GNOME Keyring
+ * through libsecret, or KWallet). Without one it falls back to "basic_text",
+ * which encrypts with a key that is the same on every computer, so the vault
+ * refuses that rather than pretend the secrets are protected.
+ */
+export function unprotectedStorageReason(input: {
+  readonly platform: NodeJS.Platform;
+  readonly encryptionAvailable: boolean;
+  /** safeStorage.getSelectedStorageBackend(), which exists only on Linux. */
+  readonly linuxBackend?: string;
+}): string | null {
+  if (input.platform === "linux") {
+    return !input.encryptionAvailable || input.linuxBackend === "basic_text" ? NO_LINUX_KEYRING_MESSAGE : null;
+  }
+  if (input.encryptionAvailable) return null;
+  return input.platform === "win32"
+    ? "Windows credential encryption is unavailable."
+    : "Your system's credential encryption is unavailable.";
+}
+
 export class CredentialVault implements LocalSecretStore {
   private writeQueue: Promise<void> = Promise.resolve();
 
@@ -52,12 +77,21 @@ export class CredentialVault implements LocalSecretStore {
     if (!isConnectorId(provider)) throw new Error(`"${provider}" is not a connector id.`);
   }
 
+  /** Every encryption and decryption goes through here first; there is no weaker fallback. */
+  private async assertProtectedStorage(): Promise<void> {
+    const encryptionAvailable = await safeStorage.isAsyncEncryptionAvailable();
+    const reason = unprotectedStorageReason({
+      platform: process.platform,
+      encryptionAvailable,
+      ...(process.platform === "linux" ? { linuxBackend: safeStorage.getSelectedStorageBackend() } : {})
+    });
+    if (reason !== null) throw new Error(reason);
+  }
+
   async save(credential: StoredCredential): Promise<void> {
     this.assertWritable();
     this.assertConnectorId(credential.provider);
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-      throw new Error("Windows credential encryption is unavailable.");
-    }
+    await this.assertProtectedStorage();
 
     const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(credential));
     await this.enqueueWrite(async () => {
@@ -69,9 +103,7 @@ export class CredentialVault implements LocalSecretStore {
 
   async get(provider: StoredCredential["provider"]): Promise<StoredCredential | null> {
     this.assertConnectorId(provider);
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-      throw new Error("Windows credential encryption is unavailable.");
-    }
+    await this.assertProtectedStorage();
 
     const contents = await this.readFile();
     const encrypted = contents[provider];
@@ -106,9 +138,7 @@ export class CredentialVault implements LocalSecretStore {
   }
 
   async getSecret(name: LocalSecretName): Promise<string | null> {
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-      throw new Error("Windows credential encryption is unavailable.");
-    }
+    await this.assertProtectedStorage();
     const encrypted = (await this.readFile())[`secret:${name}`];
     if (encrypted === undefined) return null;
     const decrypted = await safeStorage.decryptStringAsync(Buffer.from(encrypted, "base64"));
@@ -129,9 +159,7 @@ export class CredentialVault implements LocalSecretStore {
 
   async saveSecret(name: LocalSecretName, value: string): Promise<void> {
     this.assertWritable();
-    if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-      throw new Error("Windows credential encryption is unavailable.");
-    }
+    await this.assertProtectedStorage();
     const encrypted = await safeStorage.encryptStringAsync(value);
     await this.enqueueWrite(async () => {
       const contents = await this.readFile();

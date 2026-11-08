@@ -7,7 +7,7 @@ import type {
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { AgentConfigs } from "../shared/desktop-api";
-import { ConnectionsCard } from "./connections-card";
+import { ConnectionsCard, ipcErrorMessage } from "./connections-card";
 import { ExternalServersCard } from "./external-servers-card";
 
 /** Agents that connect over HTTP, in the order their buttons appear. */
@@ -125,7 +125,7 @@ export function App(): JSX.Element {
         if (problems.length > 0) setError(problems.join(" "));
       })
     ]).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Unable to load audit history.");
+      setError(ipcErrorMessage(cause, "Unable to load audit history."));
     });
   }, []);
 
@@ -139,7 +139,7 @@ export function App(): JSX.Element {
       setWorkspacePath(selectedPath);
       setSnapshot(await window.desktopApi.filesystem.inspectWorkspace(selectedPath));
     })().catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Unable to inspect the saved workspace.");
+      setError(ipcErrorMessage(cause, "Unable to inspect the saved workspace."));
     });
   }, []);
 
@@ -165,7 +165,7 @@ export function App(): JSX.Element {
       setWorkspacePath(selectedPath);
       setSnapshot(nextSnapshot);
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to inspect workspace.");
+      setError(ipcErrorMessage(cause, "Unable to inspect workspace."));
     } finally {
       setBusy(false);
     }
@@ -185,7 +185,7 @@ export function App(): JSX.Element {
       setPendingPreviews(await window.desktopApi.workflow.listPending());
       await refreshAudit();
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to create preview.");
+      setError(ipcErrorMessage(cause, "Unable to create preview."));
     } finally {
       setBusy(false);
     }
@@ -208,7 +208,7 @@ export function App(): JSX.Element {
       setPendingPreviews(await window.desktopApi.workflow.listPending());
       await refreshAudit();
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to record approval decision.");
+      setError(ipcErrorMessage(cause, "Unable to record approval decision."));
     } finally {
       setBusy(false);
     }
@@ -220,7 +220,7 @@ export function App(): JSX.Element {
     try {
       setMcpStatus(enabled ? await window.desktopApi.mcp.stop() : await window.desktopApi.mcp.start());
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to update MCP server.");
+      setError(ipcErrorMessage(cause, "Unable to update MCP server."));
     } finally {
       setBusy(false);
     }
@@ -238,7 +238,7 @@ export function App(): JSX.Element {
       }
       await copyValue(agent, config);
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to build the agent setup.");
+      setError(ipcErrorMessage(cause, "Unable to build the agent setup."));
     }
   };
 
@@ -254,7 +254,7 @@ export function App(): JSX.Element {
     try {
       setMcpStatus(await window.desktopApi.mcp.regenerateToken());
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to create a new token.");
+      setError(ipcErrorMessage(cause, "Unable to create a new token."));
     } finally {
       setBusy(false);
     }
@@ -266,7 +266,7 @@ export function App(): JSX.Element {
     try {
       setVscodeStatus(enabled ? await window.desktopApi.vscode.stop() : await window.desktopApi.vscode.start());
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to update VS Code listener.");
+      setError(ipcErrorMessage(cause, "Unable to update VS Code listener."));
     } finally {
       setBusy(false);
     }
@@ -289,7 +289,7 @@ export function App(): JSX.Element {
       setPreview(null);
       await refreshAudit();
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to execute approved action.");
+      setError(ipcErrorMessage(cause, "Unable to execute approved action."));
     } finally {
       setBusy(false);
     }
@@ -303,7 +303,7 @@ export function App(): JSX.Element {
       setPendingPreviews(await window.desktopApi.workflow.listPending());
       await refreshAudit();
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to record approval decision.");
+      setError(ipcErrorMessage(cause, "Unable to record approval decision."));
     }
   };
 
@@ -314,7 +314,7 @@ export function App(): JSX.Element {
       setUpdaterStatus(await window.desktopApi.updater.check());
       setUpdaterStatus(await window.desktopApi.updater.getStatus());
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to check for updates.");
+      setError(ipcErrorMessage(cause, "Unable to check for updates."));
     } finally {
       setBusy(false);
     }
@@ -327,7 +327,7 @@ export function App(): JSX.Element {
       setUpdaterStatus(await window.desktopApi.updater.download());
       setUpdaterStatus(await window.desktopApi.updater.getStatus());
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to download update.");
+      setError(ipcErrorMessage(cause, "Unable to download update."));
     } finally {
       setBusy(false);
     }
@@ -339,7 +339,7 @@ export function App(): JSX.Element {
     try {
       await window.desktopApi.updater.quitAndInstall();
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to install update.");
+      setError(ipcErrorMessage(cause, "Unable to install update."));
     } finally {
       setBusy(false);
     }
@@ -495,7 +495,7 @@ export function App(): JSX.Element {
           <button
             className="button ghost"
             onClick={() => void window.desktopApi.app.openLogsFolder().catch((cause: unknown) => {
-              setError(cause instanceof Error ? cause.message : "Unable to open the logs folder.");
+              setError(ipcErrorMessage(cause, "Unable to open the logs folder."));
             })}
           >
             Open logs folder
