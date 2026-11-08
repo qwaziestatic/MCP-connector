@@ -137,21 +137,28 @@ export function ConnectionsCard({ onError, copyText, copied }: ConnectionsCardPr
             : prompt?.kind === "browser"
               ? "Waiting for you to allow access in your browser"
               : connector.connected ? "Connected" : "Not connected";
+          // This copy can't sign in to the service yet. A connector that is
+          // still connected keeps its Disconnect button and settings.
+          const comingLater = !connector.signInAvailable && !connector.connected;
           return (
             <div className="connector" key={connector.id}>
               <div className="integration-row">
                 <div>
                   <strong>{connector.name}</strong>
-                  <p className="muted">{status}</p>
+                  {!comingLater && <p className="muted">{status}</p>}
                   <p className="muted connector-description">{connector.description}</p>
                 </div>
-                <button
-                  className={`button ${connector.connected ? "danger" : "secondary"}`}
-                  onClick={() => void (connector.connected ? disconnect(connector) : connect(connector))}
-                  disabled={busy !== null || prompt !== undefined}
-                >
-                  {connector.connected ? "Disconnect" : "Connect"}
-                </button>
+                {comingLater ? (
+                  <span className="badge coming-later">{connector.name} sign-in is coming in a later version</span>
+                ) : (
+                  <button
+                    className={`button ${connector.connected ? "danger" : "secondary"}`}
+                    onClick={() => void (connector.connected ? disconnect(connector) : connect(connector))}
+                    disabled={busy !== null || prompt !== undefined}
+                  >
+                    {connector.connected ? "Disconnect" : "Connect"}
+                  </button>
+                )}
               </div>
               {prompt?.kind === "code" && (
                 <div className="device-code" role="status">
@@ -179,7 +186,7 @@ export function ConnectionsCard({ onError, copyText, copied }: ConnectionsCardPr
                   </div>
                 </div>
               )}
-              {connector.settings.map((setting) => {
+              {!comingLater && connector.settings.map((setting) => {
                 const draftKey = `${connector.id}:${setting.key}`;
                 const draft = drafts[draftKey] ?? "";
                 const inputId = `setting-${connector.id}-${setting.key}`;

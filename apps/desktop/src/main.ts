@@ -15,7 +15,7 @@ import { CredentialVault } from "./security/credential-vault";
 import { ConnectorHub } from "./connection/connector-hub";
 import { ConnectorSettings } from "./connection/connector-settings";
 import { ExternalServerStore } from "./connection/external-server-store";
-import { createSignInFlow, createTokenRefresh } from "./connection/sign-in-kinds";
+import { createSignInFlow, createTokenRefresh, isSignInAvailable } from "./connection/sign-in-kinds";
 import { applyDatabaseMigrations } from "./database/migrations";
 import { AgentConnectionManager } from "./connection/connection-manager";
 import { buildAgentConfigs, stdioCommand } from "./connection/agent-config";
@@ -353,7 +353,8 @@ async function startDesktopApp(): Promise<void> {
       vault: credentialVault,
       settings: await ConnectorSettings.load(settings),
       createSignIn: (definition) => createSignInFlow(definition, credentialVault, (url) => shell.openExternal(url)),
-      createRefresh: createTokenRefresh
+      createRefresh: createTokenRefresh,
+      isSignInAvailable: (definition) => isSignInAvailable(definition)
     });
     const servers = new ExternalServers({
       clientVersion: app.getVersion(),
