@@ -2,3 +2,6 @@
 # system, so a zip built on Windows matches one built anywhere else and its
 # YAML frontmatter parses the same way.
 skills/** text eol=lf
+
+# Shell scripts run on Linux, where a carriage return breaks them.
+*.sh text eol=lf
