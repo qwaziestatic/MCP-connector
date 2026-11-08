@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.1.0-beta.1 or 0.1.0"
+        description: "Release version, for example 0.2.0-beta.1 or 0.2.0"
         required: true
         type: string
       prerelease:
@@ -14,10 +14,33 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  # Runs first, so a typo fails in seconds rather than after both builds.
+  check-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the version and the sign-in settings
+        env:
+          VERSION: ${{ inputs.version }}
+          GITHUB_CLIENT_ID: ${{ vars.MCP_GITHUB_CLIENT_ID }}
+        run: |
+          # Plain semver, as on semver.org: no spaces and no leading "v" (the tag adds it).
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$'
+          if [[ ! "$VERSION" =~ $semver ]]; then
+            echo "::error title=Invalid version::\"$VERSION\" is not a plain semver version such as 0.2.0 or 0.2.0-beta.1. Leave out the leading v and any spaces."
+            exit 1
+          fi
+          if [[ -z "${GITHUB_CLIENT_ID// /}" ]]; then
+            echo "::error title=GitHub sign-in is not set up::The MCP_GITHUB_CLIENT_ID repository variable is empty, so the release would be built without GitHub sign-in. Set it under Settings > Secrets and variables > Actions > Variables (see DEPLOYMENT.md, \"Sign-in setup\")."
+            exit 1
+          fi
+          echo "Releasing v$VERSION."
+
+  build-windows:
+    needs: check-inputs
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -35,10 +58,12 @@ jobs:
 
       - name: Set package version
         shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
         # Only what ships takes the release version: the app and the
         # extension. The app depends on core's exact version, so changing
         # core too makes npm look for that old version online, and fail.
-        run: npm version "${{ inputs.version }}" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
+        run: npm version "$env:VERSION" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
 
       - name: Generate Prisma client
         run: npm run prisma:generate
@@ -66,6 +91,108 @@ jobs:
       - name: Build the agent skill
         run: npm run package:skill
 
+      # Only what users download: the installer, the extension and the skill.
+      # The builder's other files (blockmaps, update metadata, the unpacked
+      # folder) are for an updater this release does not have. Copying the
+      # exact names fails here if one is missing.
+      - name: Collect the release files
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -ErrorAction Stop "apps/desktop/release/MCP-Connector-$env:VERSION-x64.exe" dist/
+          Copy-Item -ErrorAction Stop "apps/vscode-extension/mcp-connector-vscode-$env:VERSION.vsix" dist/
+          Copy-Item -ErrorAction Stop release/mcp-connector-skill.zip dist/
+
+      - name: Upload the release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/
+          if-no-files-found: error
+
+  build-linux:
+    needs: check-inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # xvfb, dbus and gnome-keyring for the smoke test's session; libfuse2t64
+      # lets the AppImage run.
+      - name: Install the smoke test's system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb dbus gnome-keyring libfuse2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set package version
+        env:
+          VERSION: ${{ inputs.version }}
+        # The same as on Windows: only the app and the extension.
+        run: npm version "$VERSION" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build Linux packages
+        run: npm run package:linux
+        env:
+          # Public sign-in settings built into the app; see DEPLOYMENT.md.
+          MCP_GITHUB_CLIENT_ID: ${{ vars.MCP_GITHUB_CLIENT_ID }}
+          MCP_NOTION_SIGN_IN_URL: ${{ vars.MCP_NOTION_SIGN_IN_URL }}
+
+      # The .deb as installed, the AppImage, and the unpacked build, each with
+      # an unlocked keyring; see the script for the AppArmor steps.
+      - name: Launch the packaged apps
+        run: apps/desktop/scripts/smoke-test-linux.sh
+
+      - name: Collect the release files
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p dist
+          cp "apps/desktop/release/MCP-Connector-$VERSION-x86_64.AppImage" dist/
+          cp "apps/desktop/release/MCP-Connector-$VERSION-amd64.deb" dist/
+
+      - name: Upload the release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # For the release notes in .github/release-notes.md.
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Download the release files
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
@@ -75,11 +202,10 @@ jobs:
           # Install steps first, then the changes since the last release.
           body_path: .github/release-notes.md
           generate_release_notes: true
-          # Only what users download: the installer, the extension and the
-          # skill. The builder's other files (blockmaps, update metadata, the
-          # unpacked folder) are for an updater this release does not have.
           fail_on_unmatched_files: true
           files: |
-            apps/desktop/release/*.exe
-            apps/vscode-extension/*.vsix
-            release/mcp-connector-skill.zip
+            dist/MCP-Connector-${{ inputs.version }}-x64.exe
+            dist/MCP-Connector-${{ inputs.version }}-x86_64.AppImage
+            dist/MCP-Connector-${{ inputs.version }}-amd64.deb
+            dist/mcp-connector-vscode-${{ inputs.version }}.vsix
+            dist/mcp-connector-skill.zip
