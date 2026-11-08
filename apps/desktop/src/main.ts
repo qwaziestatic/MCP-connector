@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, session, shell, type NativeImage } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
@@ -279,17 +279,28 @@ function announceApprovalRequest(preview: WorkflowPreview): void {
   notification.show();
 }
 
+/**
+ * The window's icon. The packaged app has the icon in its executable too; this
+ * covers npm run dev and the taskbar on every system. On Linux, Chromium sets
+ * a window's X11 icon (_NET_WM_ICON) only up to 128px, and left the window
+ * without any icon for the 512px PNG, so it gets a 128px copy.
+ */
+function windowIcon(): string | NativeImage {
+  const path = app.isPackaged
+    ? join(process.resourcesPath, "icon.png")
+    : join(app.getAppPath(), "assets", "icon.png");
+  return process.platform === "linux"
+    ? nativeImage.createFromPath(path).resize({ width: 128, height: 128, quality: "best" })
+    : path;
+}
+
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    // The packaged app has the icon in its executable too; this covers
-    // npm run dev and the taskbar on every system.
-    icon: app.isPackaged
-      ? join(process.resourcesPath, "icon.png")
-      : join(app.getAppPath(), "assets", "icon.png"),
+    icon: windowIcon(),
     webPreferences: {
       preload: join(currentDirectory, "../preload/preload.js"),
       contextIsolation: true,
