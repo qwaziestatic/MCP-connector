@@ -6,7 +6,9 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 960px; background: radial-gradient(circle at top right, #172b47, #0b1220 48%); }
+/* No min-width: the window's own minimum (960px) includes its frame and the
+   scrollbar, so a 960px page always scrolled sideways. */
+body { margin: 0; background: radial-gradient(circle at top right, #172b47, #0b1220 48%); }
 button { font: inherit; }
 .app-shell { max-width: 1440px; margin: 0 auto; padding: 42px 52px 64px; }
 .app-header, .card-heading, .actions, .audit-row, .file-row, .preview-row { display: flex; align-items: center; }
