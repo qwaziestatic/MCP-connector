@@ -1,6 +1,10 @@
-# Windows deployment
+# Deployment
 
-## Build an installer
+MCP Connector ships for Windows (an NSIS installer) and Linux (an AppImage
+and a .deb, x64). Each is built on its own system: the Windows installer on
+Windows, the Linux packages on Linux. The release workflow builds both.
+
+## Build the Windows installer
 
 From the workspace root:
 
@@ -32,6 +36,48 @@ The signed command uses
 `apps/desktop/electron-builder.signed.yml`; the default command remains the
 unsigned local-build path.
 
+## Build the Linux packages
+
+On Linux x64, from the workspace root:
+
+```sh
+npm install
+npm run prisma:generate
+npm run package:linux
+```
+
+This writes `apps/desktop/release/MCP-Connector-<version>-x86_64.AppImage`
+and `apps/desktop/release/MCP-Connector-<version>-amd64.deb`, plus the unpacked
+app in `apps/desktop/release/linux-unpacked`. `npm install` needs `make`, which
+better-sqlite3's build step calls even though its prebuilt binary is used.
+
+- The .deb installs to `/opt/MCP Connector`, links `mcp-connector` into
+  `/usr/bin`, and adds an AppArmor profile, `/etc/apparmor.d/mcp-connector`.
+  Ubuntu 23.10 and newer restrict the unprivileged user namespaces that
+  Chromium's sandbox needs, and the profile allows them for the app.
+  electron-builder 26 writes and loads this profile in the .deb's
+  after-install script; its maintainer is set under `build.deb` in
+  `apps/desktop/package.json`.
+- The AppImage uses electron-builder's FUSE 2 runtime, so it needs `libfuse2`
+  (`libfuse2t64` on Ubuntu 24.04 and newer). It has no AppArmor profile; the
+  release notes give users one. electron-builder's AppImage launcher adds
+  `--no-sandbox` when user namespaces are blocked, and the app refuses to
+  start with it, saying how to fix it. The AppImage's desktop entry is built
+  without `--no-sandbox` (`build.appImage.executableArgs`).
+
+To run the smoke test on Linux, the vault needs an unlocked keyring and a
+recognized desktop. `apps/desktop/scripts/linux-test-session.sh` provides both
+(it needs `xvfb`, `dbus` and `gnome-keyring`):
+
+```sh
+apps/desktop/scripts/linux-test-session.sh npm run smoke-test --workspace=@mcp-connector/desktop
+```
+
+Without a keyring, the checks that use the vault are skipped, and the test
+checks that the app refuses to store secrets instead. CI runs
+`apps/desktop/scripts/smoke-test-linux.sh`, which tests the installed .deb,
+the AppImage and the unpacked app.
+
 ## Sign-in setup
 
 ### GitHub
@@ -55,6 +101,8 @@ OAuth app's client ID is built into the installer, and a client ID is public.
    $env:MCP_GITHUB_CLIENT_ID = "<client ID>"
    npm run package:win
    ```
+
+   On Linux: `MCP_GITHUB_CLIENT_ID="<client ID>" npm run package:linux`.
 
    For the release workflow, add it as a repository variable named
    `MCP_GITHUB_CLIENT_ID` under **Settings → Secrets and variables → Actions →
@@ -105,6 +153,12 @@ Configure these environment variables before starting the application:
 
 OAuth access and refresh tokens are stored after authorization in the
 Electron `safeStorage` vault. The installer does not contain those credentials.
+On Linux, `safeStorage` uses GNOME Keyring (through libsecret) or KWallet,
+chosen from the desktop. With neither, or on a desktop Chromium doesn't
+recognize, it falls back to `basic_text`, whose key is the same on every
+computer; the vault refuses to store or read anything then, and the window
+asks the user to install or unlock a keyring. `--password-store=gnome-libsecret`
+(or `kwallet5`, `kwallet6`) picks the keyring on such a desktop.
 
 For GitHub Releases, the generic feed URL should point to the release asset
 directory for the selected version, for example:
@@ -149,7 +203,10 @@ While the MCP server runs, the app writes its address (not its token) to
 ### Stdio mode
 
 For agents that only support stdio, the installed app can be launched as
-`"MCP Connector.exe" --mcp-stdio`. It opens no window and no database: it reads
+`"MCP Connector.exe" --mcp-stdio` on Windows, `mcp-connector --mcp-stdio`
+from the .deb, or `<path to the AppImage> --mcp-stdio`. The copied setup
+uses the AppImage file's own path (the AppImage runtime's `APPIMAGE`), not
+the temporary folder it runs from, which changes on every launch. It opens no window and no database: it reads
 the running app's address from `mcp-endpoint.json` and its token from the
 vault, then relays the agent's messages to the running app, so approvals still
 happen in its window. If the app or its MCP server isn't running, every request
@@ -165,12 +222,16 @@ folder, with a copy of the vault's encryption key. Chromium rewrites `Local
 State` when it exits, so a relay sharing the app's profile could replace the key
 and lock the app out of its vault. On a new profile the key is saved about ten
 seconds after the first launch; until then the relay reports that the server
-isn't running.
+isn't running. On Linux the key is in the keyring, not in `Local State`, so
+the relay uses the app's own profile.
 
 ## Logs and startup errors
 
-The app writes a log to its logs folder (`main.log`, plus `main.old.log` once
-the log passes 1 MB): startup steps, listener starts, startup problems and
+The app's data folder is `%APPDATA%\@mcp-connector\desktop` on Windows and
+`~/.config/@mcp-connector/desktop` on Linux: Electron names it after the
+desktop app's package name. `npm run dev` uses the same folder. The app writes a log to its logs folder
+(`main.log`, plus `main.old.log` once the log passes 1 MB): startup steps,
+listener starts, startup problems and
 uncaught exceptions. It never logs tokens or credentials. **Open logs folder**
 in the app opens it. If startup fails, the app shows "MCP Connector could not
 start" with advice, the error, and the log's location, instead of closing
@@ -215,14 +276,19 @@ Before distributing a production release:
 
 ## Current release validation
 
-The current release artifacts have been validated locally:
+Every pull request builds the desktop app's packages in CI and launches each
+one with the smoke test; the release workflow does the same for the release,
+and also builds the extension and the skill:
 
-- Windows x64 NSIS installer: `apps/desktop/release/MCP-Connector-0.1.0-x64.exe`
-- VS Code extension: `apps/vscode-extension/mcp-connector-vscode-0.1.0.vsix`
+- Windows x64 NSIS installer: `apps/desktop/release/MCP-Connector-<version>-x64.exe`
+- Linux x64 AppImage and .deb: `apps/desktop/release/MCP-Connector-<version>-x86_64.AppImage`
+  and `apps/desktop/release/MCP-Connector-<version>-amd64.deb`, kept as the
+  CI run's `linux-packages` artifact for testing on a real Linux PC
+- VS Code extension (release only): `apps/vscode-extension/mcp-connector-vscode-<version>.vsix`
 - Workspace tests, type checks, and production builds pass.
 
 The artifacts are not yet production releases. The Windows installer is
-unsigned and uses the default Electron icon. Prisma has been migrated to v7
+unsigned. Prisma has been migrated to v7
 with `prisma.config.ts`, schema datasource URL removal, and the SQLite driver
 adapter integration in the Electron main process.
 `npm audit --omit=dev` is currently clean (0 runtime vulnerabilities) on this
@@ -230,9 +296,10 @@ workspace state. Electron is a devDependency whose runtime ships in the
 installer, so `npm audit --audit-level=high` must also pass; the remaining
 moderate advisories are in build and lint tooling only.
 
-The SQLite driver uses `better-sqlite3` 13, which is built on N-API, so one
-prebuilt binary loads in both Node.js and Electron and no native rebuild is
-needed. The generated Prisma client in `node_modules/.prisma/client` is copied
+The SQLite driver uses `better-sqlite3` 13, which is built on N-API and ships
+prebuilt binaries for Windows and Linux, so one binary loads in both Node.js
+and Electron and no native rebuild is needed (`npmRebuild` is off). The smoke
+test's database check proves it loads in each packaged app. The generated Prisma client in `node_modules/.prisma/client` is copied
 into the application archive explicitly because Electron Builder does not
 collect it as a dependency.
 

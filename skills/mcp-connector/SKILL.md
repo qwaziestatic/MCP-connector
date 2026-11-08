@@ -5,7 +5,7 @@ description: Work with the user's local project folder, GitHub, and Notion throu
 
 # MCP Connector
 
-MCP Connector is a Windows desktop app that gives you tools over MCP. It shows
+MCP Connector is a desktop app for Windows and Linux that gives you tools over MCP. It shows
 you only the folder the user chose, and it never changes anything for you
 without the user's explicit approval in its window. Follow these rules exactly.
 
@@ -16,6 +16,9 @@ without the user's explicit approval in its window. Follow these rules exactly.
   [references/setup.md](references/setup.md) and stop.
 - If a tool says the MCP server is not running, ask the user to open
   MCP Connector and click **Start MCP server**.
+- On Linux, if the app says no keyring is available, it can't keep tokens:
+  pass its message on. The user installs or unlocks GNOME Keyring or KWallet
+  and restarts the app; you can't work around it.
 
 ## Reading the user's workspace
 

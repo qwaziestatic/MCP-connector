@@ -1,8 +1,8 @@
 # MCP Connector
 
-MCP Connector is a Windows Electron desktop application for exposing
-user-approved local workspace context and cloud integrations as Model Context
-Protocol (MCP) tools.
+MCP Connector is an Electron desktop application for Windows and Linux that
+exposes user-approved local workspace context and cloud integrations as Model
+Context Protocol (MCP) tools.
 
 ## Status
 
@@ -13,7 +13,8 @@ The repository contains the feature-complete MVP implementation:
 - User-selected filesystem workspace inspection
 - Human-in-the-loop previews for mutating actions
 - Durable workflow previews and audit logging
-- DPAPI-backed credential storage through Electron `safeStorage`
+- Credential storage through Electron `safeStorage`: DPAPI on Windows, GNOME
+  Keyring or KWallet on Linux (without a keyring, the app stores no secrets)
 - GitHub sign-in with a short code (device flow) and Notion sign-in through a
   small sign-in service, so no client secret ships in the installer
 - Connectors for GitHub and Notion, each described by one connector definition,
@@ -21,23 +22,48 @@ The repository contains the feature-complete MVP implementation:
   connector" below)
 - Authenticated loopback MCP HTTP and stdio transports
 - Authenticated VS Code context listener and companion extension
-- Windows NSIS installer and VSIX packaging
+- Windows NSIS installer, Linux AppImage and .deb, and VSIX packaging
 
 ## Install
 
-Download the installer from
-[Releases](https://github.com/qwaziestatic/MCP-connector/releases) and run it
-(Windows 10 or 11, 64-bit). The beta is not code-signed yet, so Windows may
-say "Windows protected your PC": click **More info**, then **Run anyway**.
-Each release's notes walk through setting up an agent; the same steps are in
+Download MCP Connector from
+[Releases](https://github.com/qwaziestatic/MCP-connector/releases). Each
+release's notes walk through setting up an agent; the same steps are in
 [skills/mcp-connector/references/setup.md](./skills/mcp-connector/references/setup.md).
+
+**Windows** (10 or 11, 64-bit): run the `.exe` installer. The beta is not
+code-signed yet, so Windows may say "Windows protected your PC": click **More
+info**, then **Run anyway**.
+
+**Linux** (64-bit): on Ubuntu, Debian and their derivatives, install the
+`.deb`:
+
+```sh
+sudo apt install ./MCP-Connector-<version>-amd64.deb
+```
+
+Elsewhere, use the AppImage. It needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04
+and newer, `libfuse2` on older releases):
+
+```sh
+chmod +x MCP-Connector-<version>-x86_64.AppImage
+./MCP-Connector-<version>-x86_64.AppImage
+```
+
+On Linux, MCP Connector keeps its tokens in the system keyring, so it needs
+GNOME Keyring or KWallet, installed and unlocked; most desktops have one. On
+Ubuntu 23.10 and newer, the AppImage also needs an AppArmor profile, which
+the .deb installs for itself; the release notes have both details. Settings,
+the database and logs are in `~/.config/@mcp-connector/desktop`
+(`%APPDATA%\@mcp-connector\desktop` on Windows).
 
 To build and release it yourself, see [DEPLOYMENT.md](./DEPLOYMENT.md) and
 [RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md).
 
 ## Requirements
 
-- Windows for the desktop application
+- Windows or Linux (x64) for the desktop application; the Windows installer
+  is built on Windows and the Linux packages on Linux
 - Node.js 22.12 or newer
 - npm 11
 
@@ -60,19 +86,25 @@ npm run dev
 ```
 
 The application stores its SQLite database under the Electron user-data
-directory and stores OAuth credentials in the Windows-protected
-`safeStorage` vault. Do not place provider secrets in source files,
-`.env` files, or the renderer bundle.
+directory and stores OAuth credentials in the `safeStorage` vault, which the
+system protects: DPAPI on Windows, the keyring on Linux. Do not place provider
+secrets in source files, `.env` files, or the renderer bundle.
 
 Optional provider and MCP configuration is documented in
 [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Build distributables
 
-Unsigned Windows installer:
+Unsigned Windows installer, on Windows:
 
 ```powershell
 npm run package:win
+```
+
+Linux AppImage and .deb, on Linux (x64):
+
+```sh
+npm run package:linux
 ```
 
 VS Code extension:
