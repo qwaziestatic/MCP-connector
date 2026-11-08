@@ -127,7 +127,7 @@ export function ConnectionsCard({ onError, copyText, copied }: ConnectionsCardPr
           <p className="eyebrow">CLOUD CONNECTORS</p>
           <h2>Secure provider connections</h2>
         </div>
-        <span className="muted">Tokens remain in Windows-protected storage.</span>
+        <span className="muted">Tokens stay in your system&apos;s protected storage.</span>
       </div>
       <div className="integration-list">
         {connectors.map((connector) => {
