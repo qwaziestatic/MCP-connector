@@ -1,16 +1,35 @@
 // Launches the packaged app and checks that its window, database, and local
 // servers work. CI only builds the code, so without this a startup crash in the
 // packaged app goes unnoticed.
+//
+//   node scripts/smoke-test.mjs [executable] [--require-keyring]
+//
+// Without an executable it tests the unpacked build for this platform. On
+// Linux the vault needs a keyring; without one, the checks that use it are
+// skipped and the app must refuse to store secrets instead. --require-keyring
+// makes a missing keyring a failure, for CI.
 import { spawn, spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const executable = process.argv[2] ?? join(root, "release", "win-unpacked", "MCP Connector.exe");
+const unpackedExecutables = {
+  win32: join(root, "release", "win-unpacked", "MCP Connector.exe"),
+  linux: join(root, "release", "linux-unpacked", "mcp-connector")
+};
+const options = process.argv.slice(2);
+const requireKeyring = options.includes("--require-keyring");
+const executableArgument = options.find((option) => !option.startsWith("--"));
+if (executableArgument === undefined && unpackedExecutables[process.platform] === undefined) {
+  throw new Error(`MCP Connector is not packaged for ${process.platform}; pass the executable's path.`);
+}
+const executable = resolve(executableArgument ?? unpackedExecutables[process.platform]);
+const isWindows = process.platform === "win32";
 const startupTimeoutMs = 90_000;
 
 // A throwaway profile keeps the database and settings out of the real user-data folder.
@@ -94,7 +113,11 @@ async function waitForRender(page) {
   throw new Error("The window loaded but the app did not render.");
 }
 
-/** A new profile's key reaches the disk about ten seconds after the first launch. */
+/**
+ * On Windows, the key protecting the vault is in Local State, and a new
+ * profile's key reaches the disk about ten seconds after the first launch.
+ * Elsewhere it is in the system keyring.
+ */
 async function readVaultKey() {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -148,29 +171,48 @@ const initialize = {
   }
 };
 
+/** The same file, however the path was written. */
+function samePath(a, b) {
+  const [left, right] = [realpathSync.native(a), realpathSync.native(b)];
+  return isWindows ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/** Whether the vault can store secrets: on Linux it refuses without a keyring. */
+async function probeVault(page) {
+  try {
+    await page.evaluate("window.desktopApi.mcp.getStatus()");
+    return { available: true };
+  } catch (error) {
+    if (!isWindows && /keyring/u.test(error.message)) return { available: false, reason: error.message };
+    throw error;
+  }
+}
+
+// Checks marked needsVault store the listeners' tokens in the vault.
 const checks = [
-  ["window loads", async (page) => {
+  { name: "window loads", run: async (page) => {
     await waitForRender(page);
     const title = await page.evaluate("document.title");
     if (title !== "MCP Connector") throw new Error(`Unexpected window title: ${JSON.stringify(title)}.`);
-  }],
-  ["renderer has no Node.js access", async (page) => {
+  } },
+  { name: "renderer has no Node.js access", run: async (page) => {
     if (!await page.evaluate("typeof require === 'undefined' && typeof process === 'undefined'")) {
       throw new Error("Node.js globals are exposed to the renderer.");
     }
-  }],
-  ["Copy buttons may write the clipboard; reading it stays denied", async (page) => {
+  } },
+  { name: "Copy buttons may write the clipboard; reading it stays denied", run: async (page) => {
     // Only asks for the permissions, so it never touches the real clipboard.
     const query = (name) => page.evaluate(`navigator.permissions.query({ name: "${name}" }).then((p) => p.state)`);
     const [write, read] = [await query("clipboard-write"), await query("clipboard-read")];
     if (write !== "granted") throw new Error(`clipboard-write is "${write}", so every Copy button fails.`);
     if (read === "granted") throw new Error("The renderer can read the clipboard.");
-  }],
-  ["database loads pending approvals and audit log", async (page) => {
+  } },
+  // Proves the SQLite driver (better-sqlite3) loads in the packaged app.
+  { name: "database loads pending approvals and audit log", run: async (page) => {
     await page.evaluate("window.desktopApi.workflow.listPending()");
     await page.evaluate("window.desktopApi.workflow.listAuditRecords()");
-  }],
-  ["MCP server starts, requires its token, and stops", async (page) => {
+  } },
+  { name: "MCP server starts, requires its token, and stops", needsVault: true, run: async (page) => {
     const server = await page.evaluate("window.desktopApi.mcp.start()");
     try {
       const response = await fetch(server.url, { method: "POST", body: "{}" });
@@ -178,42 +220,77 @@ const checks = [
     } finally {
       await page.evaluate("window.desktopApi.mcp.stop()");
     }
-  }],
-  ["stdio relay says when the server is stopped, reaches it when running, and keeps the vault key", async (page) => {
-    // This runs before a new profile's key reaches the disk, which is when a
-    // relay sharing the profile could replace it.
+  } },
+  { name: "stdio relay says when the server is stopped, reaches it when running, and keeps the vault key", needsVault: true, run: async (page) => {
+    // On Windows this runs before a new profile's key reaches the disk, which
+    // is when a relay sharing the profile could replace it.
     const stopped = await requestThroughStdio(initialize);
     if (!/not running/u.test(stopped.error?.message ?? "")) {
       throw new Error(`Unexpected answer with the server stopped: ${JSON.stringify(stopped)}.`);
     }
-    const key = await readVaultKey();
-    await page.evaluate("window.desktopApi.mcp.start()");
+    const key = isWindows ? await readVaultKey() : null;
+    const { bearerToken } = await page.evaluate("window.desktopApi.mcp.start()");
     try {
       const answer = await requestThroughStdio(initialize);
       if (answer.result?.serverInfo?.name !== "mcp-connector") {
         throw new Error(`Unexpected answer: ${JSON.stringify(answer)}.`);
       }
+      // The copied setup must start this same program: for an AppImage, the
+      // AppImage file rather than its temporary mount.
+      const configs = await page.evaluate("window.desktopApi.mcp.getAgentConfigs()");
+      const command = JSON.parse(configs.stdioJson).mcpServers["mcp-connector"].command;
+      if (!samePath(command, executable)) throw new Error(`The stdio setup starts ${command}, not ${executable}.`);
+      if (!isWindows) {
+        // The relay shares the app's profile here, so a new one must still
+        // read the vault after the last one exited.
+        const again = await requestThroughStdio(initialize);
+        if (again.result?.serverInfo?.name !== "mcp-connector") {
+          throw new Error(`A second relay could not reach the server: ${JSON.stringify(again)}.`);
+        }
+      }
     } finally {
       await page.evaluate("window.desktopApi.mcp.stop()");
     }
-    if (await readVaultKey() !== key) throw new Error("The relay replaced the app's encryption key.");
-  }],
-  ["VS Code listener starts and stops", async (page) => {
+    if (isWindows && await readVaultKey() !== key) throw new Error("The relay replaced the app's encryption key.");
+    if ((await page.evaluate("window.desktopApi.mcp.getStatus()")).bearerToken !== bearerToken) {
+      throw new Error("The app's MCP token changed while the relay ran.");
+    }
+  } },
+  { name: "VS Code listener starts and stops", needsVault: true, run: async (page) => {
     await page.evaluate("window.desktopApi.vscode.start()");
     await page.evaluate("window.desktopApi.vscode.stop()");
-  }]
+  } }
 ];
 
 const failures = [];
 try {
   const page = await connect((await waitForPage()).webSocketDebuggerUrl);
-  for (const [name, check] of checks) {
+  let vault = null;
+  for (const { name, needsVault, run } of checks) {
     try {
-      await check(page);
+      if (needsVault) {
+        vault ??= await probeVault(page);
+        if (!vault.available) {
+          if (requireKeyring) throw new Error(`no keyring: ${vault.reason}`);
+          console.log(`  skip  ${name}: no keyring`);
+          continue;
+        }
+      }
+      await run(page);
       console.log(`  ok    ${name}`);
     } catch (error) {
       failures.push(name);
       console.log(`  FAIL  ${name}: ${error.message}`);
+    }
+  }
+  if (vault?.available === false && !requireKeyring) {
+    // Without a keyring the vault must refuse, with advice the user can follow.
+    const name = "without a keyring, the vault refuses to store secrets and says why";
+    if (/Install or unlock GNOME Keyring or KWallet/u.test(vault.reason)) {
+      console.log(`  ok    ${name}`);
+    } else {
+      failures.push(name);
+      console.log(`  FAIL  ${name}: ${vault.reason}`);
     }
   }
   page.close();
