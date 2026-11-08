@@ -29,6 +29,21 @@ export interface AgentConfigInput {
   readonly platform?: NodeJS.Platform;
 }
 
+/**
+ * The program an agent starts for stdio mode. Inside an AppImage,
+ * process.execPath is in a temporary mount whose name changes on every launch,
+ * so a setup copied from it would stop working once the app restarts. The
+ * AppImage runtime puts the path of the AppImage file itself in APPIMAGE.
+ */
+export function stdioCommand(input: {
+  readonly execPath: string;
+  readonly platform: NodeJS.Platform;
+  readonly env: NodeJS.ProcessEnv;
+}): string {
+  const appImage = input.env.APPIMAGE;
+  return input.platform === "linux" && appImage !== undefined && appImage.length > 0 ? appImage : input.execPath;
+}
+
 // Windows paths cannot contain double quotes, so quoting them is enough there.
 // Elsewhere, single quotes are the safe POSIX shell form.
 function quoteForShell(value: string, platform: NodeJS.Platform): string {
