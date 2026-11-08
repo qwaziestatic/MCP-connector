@@ -128,6 +128,9 @@
       ],
       "artifactName": "MCP-Connector-${version}-${arch}.${ext}"
     },
+    "appImage": {
+      "executableArgs": []
+    },
     "deb": {
       "maintainer": "Dagim Tsegaye <139397610+qwaziestatic@users.noreply.github.com>",
       "depends": [

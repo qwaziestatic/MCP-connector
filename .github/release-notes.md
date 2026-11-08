@@ -17,6 +17,33 @@ To teach your agent how to use MCP Connector, also add the skill: download
 `mcp-connector-skill.zip` and unzip it into your agent's skills folder (for
 Claude Code, `%USERPROFILE%\.claude\skills`).
 
+## The Linux AppImage
+
+The AppImage needs FUSE 2. On Ubuntu 24.04 and newer, install it with
+`sudo apt install libfuse2t64`; on Ubuntu 22.04, with `sudo apt install libfuse2`.
+
+**Ubuntu 23.10 and newer** restrict the user namespaces that MCP Connector's
+sandbox needs, for programs AppArmor doesn't know. The .deb installs an
+AppArmor profile that allows them, so it starts normally. The AppImage has no
+profile: MCP Connector then says it can't start safely and closes, rather than
+run without its sandbox. Either install the .deb, or allow the AppImage with
+this profile, which covers `MCP-Connector-*.AppImage` files anywhere in your
+home folder:
+
+```sh
+sudo tee /etc/apparmor.d/mcp-connector-appimage > /dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile mcp-connector-appimage @{HOME}/**/MCP-Connector-*.AppImage flags=(unconfined) {
+  userns,
+}
+EOF
+sudo apparmor_parser -r /etc/apparmor.d/mcp-connector-appimage
+```
+
+Don't start it with `--no-sandbox`: MCP Connector refuses to run that way.
+
 ## Also attached
 
 - `mcp-connector-vscode-….vsix`: the optional VS Code extension that shares
