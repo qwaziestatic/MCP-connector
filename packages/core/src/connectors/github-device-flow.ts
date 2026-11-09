@@ -49,14 +49,27 @@ const errorSchema = z.object({
   interval: z.number().int().positive().optional()
 });
 
+interface PostResult {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly body: unknown;
+}
+
 const EXPIRED_MESSAGE = "The GitHub code expired before it was entered. Click Connect to get a new code.";
+const CANCELLED_MESSAGE = "GitHub sign-in was cancelled.";
+
+/** The useful part of a failed fetch, such as undici's "Connect Timeout Error (…)". */
+function networkErrorText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  return error.cause instanceof Error ? error.cause.message : error.message;
+}
 
 function defaultSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, milliseconds);
     signal?.addEventListener("abort", () => {
       clearTimeout(timer);
-      reject(new Error("GitHub sign-in was cancelled."));
+      reject(new Error(CANCELLED_MESSAGE));
     }, { once: true });
   });
 }
@@ -114,20 +127,45 @@ export class GitHubDeviceFlow {
     };
   }
 
-  /** Polls until the user approves, declines, or the code expires. */
+  /**
+   * Polls until the user approves, declines, or the code expires. A poll that
+   * can't reach GitHub, or that GitHub answers with a server error, doesn't
+   * end the sign-in: the code is still valid, so the next poll tries again.
+   */
   async waitForToken(authorization: GitHubDeviceAuthorization, signal?: AbortSignal): Promise<OAuthTokenSet> {
     let interval = authorization.interval;
     const expiresAt = Date.parse(authorization.expiresAt);
+    // A function, so each check reads the signal anew: it can abort mid-request.
+    const cancelled = (): boolean => signal?.aborted === true;
+    // Why the last poll failed, if it did, to explain an expiry during an outage.
+    let unreachable: string | null = null;
     for (;;) {
-      if (signal?.aborted === true) throw new Error("GitHub sign-in was cancelled.");
-      if (this.now() >= expiresAt) throw new Error(EXPIRED_MESSAGE);
+      if (cancelled()) throw new Error(CANCELLED_MESSAGE);
+      if (this.now() >= expiresAt) {
+        throw new Error(unreachable === null
+          ? EXPIRED_MESSAGE
+          : `MCP Connector could not reach GitHub to finish signing in (${unreachable}). `
+            + "Check your internet connection, then click Connect again.");
+      }
       // GitHub rejects requests made sooner than the interval.
       await this.sleep(interval * 1000, signal);
-      const json = await this.post(GITHUB_ACCESS_TOKEN_URL, {
-        client_id: this.clientId,
-        device_code: authorization.deviceCode,
-        grant_type: GITHUB_DEVICE_GRANT_TYPE
-      }, signal);
+      let json: PostResult;
+      try {
+        json = await this.post(GITHUB_ACCESS_TOKEN_URL, {
+          client_id: this.clientId,
+          device_code: authorization.deviceCode,
+          grant_type: GITHUB_DEVICE_GRANT_TYPE
+        }, signal);
+      } catch (cause) {
+        if (cancelled()) throw new Error(CANCELLED_MESSAGE);
+        unreachable = networkErrorText(cause);
+        continue;
+      }
+      if (json.status >= 500) {
+        unreachable = `GitHub answered ${json.status}`;
+        continue;
+      }
+      unreachable = null;
       const error = errorSchema.safeParse(json.body);
       if (error.success) {
         if (error.data.error === "authorization_pending") continue;
@@ -176,11 +214,7 @@ export class GitHubDeviceFlow {
     };
   }
 
-  private async post(
-    url: string,
-    body: Record<string, string>,
-    signal?: AbortSignal
-  ): Promise<{ readonly ok: boolean; readonly status: number; readonly body: unknown }> {
+  private async post(url: string, body: Record<string, string>, signal?: AbortSignal): Promise<PostResult> {
     const response = await this.fetch(url, {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },

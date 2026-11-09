@@ -14,13 +14,21 @@ const deviceCode = {
   interval: 5
 };
 
-/** A fake GitHub: answers the device-code request, then each poll in turn. */
-function fakeGitHub(polls: Array<Record<string, unknown>>) {
+/**
+ * A fake GitHub: answers the device-code request, then each poll in turn. A
+ * poll can also be an Error, which the request throws as a dropped connection
+ * would, or a Response, which is returned as it is.
+ */
+function fakeGitHub(polls: Array<Record<string, unknown> | Error | Response>, onPoll?: () => void) {
   const requests: Array<{ url: string; body: Record<string, string> }> = [];
   const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const body = Object.fromEntries(new URLSearchParams(String(init?.body)));
     requests.push({ url: String(url), body });
-    const answer = String(url) === GITHUB_DEVICE_CODE_URL ? deviceCode : polls.shift() ?? { error: "authorization_pending" };
+    if (String(url) === GITHUB_DEVICE_CODE_URL) return new Response(JSON.stringify(deviceCode), { status: 200 });
+    onPoll?.();
+    const answer = polls.shift() ?? { error: "authorization_pending" };
+    if (answer instanceof Error) throw answer;
+    if (answer instanceof Response) return answer;
     return new Response(JSON.stringify(answer), { status: 200 });
   }) as unknown as typeof fetch;
   const waits: number[] = [];
@@ -119,6 +127,46 @@ describe("GitHubDeviceFlow", () => {
 
     const dead = fakeGitHub([{ error: "bad_refresh_token", error_description: "The refresh token passed is incorrect or expired." }]);
     await expect(dead.flow.refresh("ghr_old")).rejects.toThrow("can no longer be renewed");
+  });
+
+  it("keeps polling through dropped connections and server errors, then returns the token", async () => {
+    const dropped = new TypeError("fetch failed", {
+      cause: new Error("Connect Timeout Error (attempted address: github.com:443, timeout: 10000ms)")
+    });
+    const { flow, waits } = fakeGitHub([
+      { error: "authorization_pending" },
+      dropped,
+      new Response("<html>Bad gateway</html>", { status: 502 }),
+      dropped,
+      { access_token: "gho_token" }
+    ]);
+
+    await expect(flow.waitForToken(await flow.start())).resolves.toMatchObject({ accessToken: "gho_token" });
+    expect(waits).toEqual([5000, 5000, 5000, 5000, 5000]);
+  });
+
+  it("still stops at once when the user declines after a dropped connection", async () => {
+    const { flow } = fakeGitHub([new TypeError("fetch failed"), { error: "access_denied" }]);
+    await expect(flow.waitForToken(await flow.start())).rejects.toThrow("declined");
+  });
+
+  it("says GitHub could not be reached when the code expires during an outage", async () => {
+    const outage = Array.from({ length: 5 }, () => new TypeError("fetch failed", {
+      cause: new Error("Connect Timeout Error (attempted address: github.com:443, timeout: 10000ms)")
+    }));
+    const { flow } = fakeGitHub(outage);
+    const authorization = { ...(await flow.start()), expiresAt: new Date(1_000_000 + 12_000).toISOString() };
+
+    await expect(flow.waitForToken(authorization)).rejects.toThrow(
+      "MCP Connector could not reach GitHub to finish signing in (Connect Timeout Error (attempted address: github.com:443, timeout: 10000ms))."
+    );
+  });
+
+  it("stops when cancelled while a poll fails", async () => {
+    const controller = new AbortController();
+    const { flow } = fakeGitHub([new DOMException("This operation was aborted", "AbortError")], () => controller.abort());
+
+    await expect(flow.waitForToken(await flow.start(), controller.signal)).rejects.toThrow("cancelled");
   });
 
   it("stops when cancelled", async () => {
