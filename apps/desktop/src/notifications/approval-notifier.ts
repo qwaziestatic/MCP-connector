@@ -1,12 +1,12 @@
-// Decides when to tell the user that an AI agent is waiting for approval.
-// Agent requests otherwise sit in the queue unnoticed while the window is in
-// the background, and the agent waits.
+// Decides when to tell the user that an AI agent or a web chat is waiting for
+// approval. Their requests otherwise sit in the queue unnoticed while the
+// window is in the background, and they wait.
 import type { WorkflowPreview, WorkflowPreviewState } from "@mcp-connector/core";
 
 /**
  * Returns a listener for WorkflowService.subscribe() that calls `notify` once
- * for each new agent request. Requests already pending at startup are not
- * announced again.
+ * for each new request from an agent or a web chat. Requests the user made in
+ * the app, and requests already pending at startup, are not announced.
  */
 export function createApprovalNotifier(
   initial: readonly WorkflowPreviewState[],
@@ -16,7 +16,7 @@ export function createApprovalNotifier(
   return (states) => {
     for (const state of states) {
       if (seen.has(state.preview.id)) continue;
-      if (state.preview.source === "mcp" && state.status === "PREVIEWED") {
+      if (state.preview.source !== "ui" && state.status === "PREVIEWED") {
         notify(state.preview);
       }
     }

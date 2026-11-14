@@ -5,7 +5,9 @@ import { FilesystemService } from "../filesystem/filesystem.service.js";
 import type { ExternalToolSource } from "../gateway/external-servers.js";
 import { registerExternalTools } from "../gateway/gateway-tools.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
+import type { McpClientSource } from "../workflow/workflow.types.js";
 import { result } from "./tool-result.js";
+import { askBeforeWebReads } from "./web-reads.js";
 import { z } from "zod";
 
 export interface McpConnectorDependencies {
@@ -15,13 +17,32 @@ export interface McpConnectorDependencies {
   readonly connectors?: readonly ConnectedConnector[];
   /** Other MCP servers the user connected; their tools are offered as `<server>__<tool>`. */
   readonly external?: ExternalToolSource;
+  /**
+   * Whether a web chat's read-only calls wait for the user's approval, read
+   * on every call. They wait when this is not given.
+   */
+  readonly askBeforeWebReads?: () => boolean | Promise<boolean>;
 }
 
-export function createMcpServer(dependencies: McpConnectorDependencies): McpServer {
+/**
+ * `source` says who the server is for: an agent with the MCP token, or a web
+ * chat with the browser key. Both get the same tools; a web chat's previews
+ * are labelled "web", and its reads can wait for approval.
+ */
+export function createMcpServer(
+  dependencies: McpConnectorDependencies,
+  source: McpClientSource = "mcp"
+): McpServer {
   const server = new McpServer(
     { name: "mcp-connector", version: "0.1.0" },
     { maxToolInputElements: 100 }
   );
+  const webReads = source === "web"
+    ? askBeforeWebReads(server, {
+        workflow: dependencies.workflow,
+        isOn: dependencies.askBeforeWebReads ?? (() => true)
+      })
+    : undefined;
 
   server.registerTool(
     "workspace_get_selected",
@@ -91,13 +112,15 @@ export function createMcpServer(dependencies: McpConnectorDependencies): McpServ
   );
 
   for (const { definition, runtime } of dependencies.connectors ?? []) {
-    definition.registerTools(server, { runtime, workflow: dependencies.workflow });
+    definition.registerTools(server, { runtime, workflow: dependencies.workflow, source });
   }
 
   registerExternalTools(server, {
     workflow: dependencies.workflow,
+    source,
     ...(dependencies.external === undefined ? {} : { external: dependencies.external })
   });
+  webReads?.registerRunTool();
 
   return server;
 }

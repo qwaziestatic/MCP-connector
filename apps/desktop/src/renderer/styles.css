@@ -52,6 +52,7 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .file-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .audit-row strong, .audit-row time { flex-shrink: 0; }
 .audit-row strong { min-width: 56px; }
+.audit-source { flex-shrink: 0; min-width: 34px; color: #91a4ba; font-size: 11px; font-weight: 800; }
 .audit-summary { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 7px 0; }
 .audit-target, .audit-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .audit-description { color: #91a4ba; font-size: 11px; }
@@ -93,6 +94,9 @@ pre { max-height: 220px; overflow: auto; padding: 14px; border-radius: 8px; back
 .endpoint-value { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid #263a54; border-radius: 8px; }
 .endpoint-value span { color: #91a4ba; font-size: 12px; }
 .endpoint-value code { overflow: hidden; color: #aed2f3; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.key-actions { display: flex; gap: 10px; }
+.checkbox-setting { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; font-size: 13px; font-weight: 700; }
+.checkbox-setting + p { margin-bottom: 0; font-size: 12px; }
 .alert { margin-bottom: 20px; padding: 12px 15px; border: 1px solid #8d4b55; border-radius: 8px; background: #3a2029; color: #ffc2c9; }
 .status { min-width: 88px; text-align: center; }
 .status.previewed { background: #3c3b26; color: #e7d87e; }

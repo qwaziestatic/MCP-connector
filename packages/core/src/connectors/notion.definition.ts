@@ -48,7 +48,7 @@ export function createNotionDefinition(options: {
         return (preview) => executeNotionPagePreview(preview, notion);
       }
     },
-    registerTools(server, { runtime, workflow }) {
+    registerTools(server, { runtime, workflow, source }) {
       server.registerTool(
         "notion_create_project_page_preview",
         {
@@ -71,7 +71,7 @@ export function createNotionDefinition(options: {
         async ({ title, markdown }) => {
           // Report a missing sign-in or database now, not after the user approved.
           await connect(runtime);
-          const preview = await createNotionPagePreview(workflow, { title, markdown }, "mcp");
+          const preview = await createNotionPagePreview(workflow, { title, markdown }, source);
           return result({
             requiresApproval: true,
             preview

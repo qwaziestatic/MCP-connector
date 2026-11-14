@@ -3,12 +3,19 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { JSONRPCMessage, MessageExtraInfo } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { McpClientSource } from "../workflow/workflow.types.js";
 import { createMcpServer, type McpConnectorDependencies } from "./mcp-server.js";
 
 export interface McpHttpServerOptions {
   readonly host?: "127.0.0.1";
   readonly port?: number;
   readonly bearerToken?: string;
+  /**
+   * The browser extension's key, or null while web chats are turned off. It is
+   * read on every request, so it can be replaced or turned off while the server
+   * runs, and the agents' token is never involved.
+   */
+  readonly browserKey?: () => string | null;
 }
 
 export interface McpHttpServerHandle {
@@ -30,6 +37,24 @@ function tokensMatch(provided: string, expected: string): boolean {
   const expectedBuffer = Buffer.from(expected);
   return providedBuffer.length === expectedBuffer.length
     && timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+/**
+ * Who sent the request, from the key it carries, or null if it carries neither.
+ * Both keys are compared every time, in constant time, so the answer takes as
+ * long whichever one was sent.
+ */
+function clientOf(
+  authorization: string | undefined,
+  bearerToken: string,
+  browserKey: string | null
+): McpClientSource | null {
+  if (typeof authorization !== "string") return null;
+  const isAgent = tokensMatch(authorization, `Bearer ${bearerToken}`);
+  // An empty key is no key: "Bearer " must never be accepted.
+  const isWebChat = browserKey !== null && browserKey.length > 0
+    && tokensMatch(authorization, `Bearer ${browserKey}`);
+  return isAgent ? "mcp" : isWebChat ? "web" : null;
 }
 
 class McpTransportAdapter implements Transport {
@@ -92,11 +117,8 @@ export async function startMcpHttpServer(
       return;
     }
 
-    const authorization = request.headers.authorization;
-    if (
-      typeof authorization !== "string"
-      || !tokensMatch(authorization, `Bearer ${bearerToken}`)
-    ) {
+    const client = clientOf(request.headers.authorization, bearerToken, options.browserKey?.() ?? null);
+    if (client === null) {
       unauthorized(response);
       return;
     }
@@ -104,7 +126,7 @@ export async function startMcpHttpServer(
     try {
       const body = await readJsonBody(request);
       const transport = new StreamableHTTPServerTransport();
-      const mcpServer = createMcpServer(dependencies);
+      const mcpServer = createMcpServer(dependencies, client);
       await mcpServer.connect(new McpTransportAdapter(transport));
       await transport.handleRequest(request, response, body);
     } catch (error) {

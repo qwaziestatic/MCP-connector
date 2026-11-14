@@ -191,6 +191,7 @@ buttons under **Copy the setup for your agent** copy a ready-to-paste setup:
 
 Every setup carries the bearer token, so keep these files private. **New
 token** replaces the token; agents set up with the old one must be set up again.
+The browser extension's key is separate and keeps working (see "Web chats").
 
 Non-secret settings live in `settings.json` in the app's user-data folder:
 
@@ -198,9 +199,41 @@ Non-secret settings live in `settings.json` in the app's user-data folder:
   pick a free port on every start; the address then changes on each start.
 - `mcpServerEnabled` and `vscodeListenerEnabled`, which the app updates when
   you start or stop each listener, so they restart on the next launch.
+- `askBeforeWebReads`, the **Ask before web chats read anything** choice. It
+  is on unless this is `false`.
 
 While the MCP server runs, the app writes its address (not its token) to
 `mcp-endpoint.json` in the same folder.
+
+### Web chats
+
+The browser extension connects web chats to the same MCP server, with a key
+of its own. Under **Web chats** in the app, **Create key** generates it. It is
+stored encrypted in the credential vault, like the agents' token, and the
+extension is given the key and the server's port. **New key** replaces it and
+**Turn off** removes it; the old key is refused at once. Neither restarts the
+server or changes the agents' token, and **New token** does not change the
+browser key. Until a key is created, the server accepts only the agents'
+token.
+
+A request made with the browser key gets the same tools as an agent's, with
+two differences:
+
+- Its previews and audit records have the source `web`. An agent's have
+  `mcp` and the app's own have `ui`. The source is shown in the pending
+  approvals and in the audit log, and the app notifies you about a web chat's
+  request as it does about an agent's.
+- While **Ask before web chats read anything** is on, which it is by
+  default, a read-only tool does not answer at once. It returns a preview
+  with the action `READ` and no data. Once you approve it,
+  `web_run_approved_read` runs it once, exactly as approved, and returns the
+  result. This covers MCP Connector's own tools, the connectors' tools and
+  other MCP servers' tools. Only `workflow_preview_status` always answers, so
+  that the approval can be followed. With the setting off, read-only tools
+  answer web chats at once; changes still wait for approval.
+
+Requests made with the agents' token behave as before: read-only tools run at
+once, and `web_run_approved_read` is not offered to them.
 
 ### Stdio mode
 

@@ -8,6 +8,7 @@ export * from "./gateway/gateway-tools.js";
 export * from "./mcp/mcp-server.js";
 export * from "./mcp/http.js";
 export * from "./mcp/stdio-bridge.js";
+export * from "./mcp/web-reads.js";
 export * from "./workflow/audit.repository.js";
 export * from "./workflow/prisma-audit.repository.js";
 export * from "./workflow/workflow.service.js";

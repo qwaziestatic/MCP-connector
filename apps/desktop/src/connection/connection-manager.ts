@@ -1,7 +1,8 @@
 // Runs the two local listeners that other programs connect to: the MCP HTTP
 // server (for AI agents) and the VS Code context listener. Both use a fixed
 // port and a token saved in the vault, so agents and the VS Code extension are
-// set up once and keep working after the app restarts.
+// set up once and keep working after the app restarts. The MCP server also
+// accepts the browser extension's own key, which web chats use.
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -32,6 +33,14 @@ export interface VsCodeListenerStatus extends ListenerStatus {
   readonly latestContext: VsCodeContext | null;
 }
 
+/** What the window shows under "Web chats". */
+export interface WebChatStatus {
+  /** The browser extension's key, or null while web chats are turned off. */
+  readonly browserKey: string | null;
+  /** Whether a web chat's read-only calls wait for the user's approval. */
+  readonly askBeforeReads: boolean;
+}
+
 /** Written while the MCP server runs, so `--mcp-stdio` can find it. Holds no secrets. */
 export interface McpEndpointFile {
   readonly url: string;
@@ -57,6 +66,9 @@ function isAddressInUse(error: unknown): boolean {
 export class AgentConnectionManager {
   private mcpServer: McpHttpServerHandle | null = null;
   private vsCodeServer: VsCodeContextServerHandle | null = null;
+  // The browser key the running server accepts. The server reads it on every
+  // request, so a new key, or none, takes effect at once, without a restart.
+  private browserKey: string | null = null;
 
   public constructor(private readonly options: ConnectionManagerOptions) {}
 
@@ -91,6 +103,35 @@ export class AgentConnectionManager {
       await this.openMcpServer();
     }
     return this.getMcpStatus();
+  }
+
+  async getWebChatStatus(): Promise<WebChatStatus> {
+    this.browserKey = await this.options.secrets.getSecret("browser-key");
+    return { browserKey: this.browserKey, askBeforeReads: await this.askBeforeWebReads() };
+  }
+
+  /**
+   * Creates the browser key, or replaces it; the old one stops working at
+   * once. The agents' token and the running server are not touched.
+   */
+  async newBrowserKey(): Promise<WebChatStatus> {
+    const key = newToken();
+    await this.options.secrets.saveSecret("browser-key", key);
+    this.browserKey = key;
+    return this.getWebChatStatus();
+  }
+
+  /** Removes the browser key, so no web chat is accepted until a new one is created. */
+  async turnOffWebChats(): Promise<WebChatStatus> {
+    // Refused from this moment, even if the vault cannot be written.
+    this.browserKey = null;
+    await this.options.secrets.removeSecret("browser-key");
+    return this.getWebChatStatus();
+  }
+
+  async setAskBeforeWebReads(ask: boolean): Promise<WebChatStatus> {
+    await this.options.settings.update({ askBeforeWebReads: ask });
+    return this.getWebChatStatus();
   }
 
   async getVsCodeStatus(): Promise<VsCodeListenerStatus> {
@@ -164,10 +205,16 @@ export class AgentConnectionManager {
     if (this.mcpServer !== null) return;
     const port = await this.mcpPort();
     try {
-      this.mcpServer = await startMcpHttpServer(this.options.getMcpDependencies(), {
-        port,
-        bearerToken: await this.token("mcp-http-token")
-      });
+      this.browserKey = await this.options.secrets.getSecret("browser-key");
+      this.mcpServer = await startMcpHttpServer(
+        // Read on every call, so changing the setting reaches the running server.
+        { ...this.options.getMcpDependencies(), askBeforeWebReads: () => this.askBeforeWebReads() },
+        {
+          port,
+          bearerToken: await this.token("mcp-http-token"),
+          browserKey: () => this.browserKey
+        }
+      );
     } catch (error) {
       throw this.describeStartError("MCP server", "mcpPort", port, error);
     }
@@ -204,6 +251,11 @@ export class AgentConnectionManager {
     const token = newToken();
     await this.options.secrets.saveSecret(name, token);
     return token;
+  }
+
+  /** On unless the user turned it off; a settings file that cannot be read keeps it on. */
+  private async askBeforeWebReads(): Promise<boolean> {
+    return (await this.options.settings.read()).askBeforeWebReads ?? true;
   }
 
   private async mcpPort(): Promise<number> {

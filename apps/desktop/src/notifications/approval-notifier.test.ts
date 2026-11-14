@@ -2,7 +2,7 @@ import type { WorkflowPreview, WorkflowPreviewState } from "@mcp-connector/core"
 import { describe, expect, it } from "vitest";
 import { createApprovalNotifier } from "./approval-notifier";
 
-function state(id: string, source: "ui" | "mcp", status: WorkflowPreviewState["status"] = "PREVIEWED"): WorkflowPreviewState {
+function state(id: string, source: WorkflowPreview["source"], status: WorkflowPreviewState["status"] = "PREVIEWED"): WorkflowPreviewState {
   return {
     status,
     preview: {
@@ -28,6 +28,16 @@ describe("createApprovalNotifier", () => {
     listener([state("a", "mcp", "APPROVED"), state("b", "mcp")]);
 
     expect(announced.map((preview) => preview.id)).toEqual(["a", "b"]);
+  });
+
+  it("announces requests from web chats too", () => {
+    const announced: WorkflowPreview[] = [];
+    const listener = createApprovalNotifier([], (preview) => announced.push(preview));
+
+    listener([state("w", "web")]);
+    listener([state("w", "web"), state("a", "mcp")]);
+
+    expect(announced.map((preview) => [preview.id, preview.source])).toEqual([["w", "web"], ["a", "mcp"]]);
   });
 
   it("ignores requests the user made in the app", () => {

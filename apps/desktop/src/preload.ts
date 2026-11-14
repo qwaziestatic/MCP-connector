@@ -67,6 +67,12 @@ const desktopApi: DesktopApi = {
     regenerateToken: () => ipcRenderer.invoke("mcp:regenerate-token"),
     getAgentConfigs: () => ipcRenderer.invoke("mcp:get-agent-configs")
   },
+  webChats: {
+    getStatus: () => ipcRenderer.invoke("web-chats:get-status"),
+    newKey: () => ipcRenderer.invoke("web-chats:new-key"),
+    turnOff: () => ipcRenderer.invoke("web-chats:turn-off"),
+    setAskBeforeReads: (ask) => ipcRenderer.invoke("web-chats:set-ask-before-reads", ask)
+  },
   vscode: {
     getStatus: () => ipcRenderer.invoke("vscode:get-status"),
     start: () => ipcRenderer.invoke("vscode:start"),

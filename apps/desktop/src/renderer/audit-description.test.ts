@@ -35,6 +35,19 @@ describe("describeAuditRecord", () => {
     expect(describeAuditRecord(record(executed))).toBe('Run "write_file" on files · file_path: C:\\Projects\\a.txt');
   });
 
+  it("adds what a web chat's read works on", () => {
+    const read = {
+      action: "READ",
+      target: "filesystem_inspect_workspace",
+      summary: 'Run the read-only tool "Inspect local workspace"',
+      payload: { tool: "filesystem_inspect_workspace", arguments: { workspacePath: "docs" } },
+      source: "web"
+    };
+    expect(describeAuditRecord(record(read))).toBe('Run the read-only tool "Inspect local workspace"');
+    expect(describeAuditRecord(record({ ...read, payload: { tool: "files__read_file", arguments: { path: "notes.md" } } })))
+      .toBe('Run the read-only tool "Inspect local workspace" · path: notes.md');
+  });
+
   it("never shows arguments that may hold secrets", () => {
     const text = describeAuditRecord(record(externalCall({ token: "ghp_abc", apiKey: "sk-123", password: "hunter2" })));
     expect(text).toBe('Run "write_file" on files');

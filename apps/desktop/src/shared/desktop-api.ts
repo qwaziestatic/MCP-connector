@@ -1,6 +1,7 @@
 import type { AuditRecord, WorkflowPreview, WorkflowPreviewState, WorkspaceSnapshot } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { ConnectorView } from "../connection/connector-hub";
+import type { WebChatStatus } from "../connection/connection-manager";
 import type { ExternalServerItem } from "../connection/external-server-store";
 import type { SignInPrompt } from "../security/sign-in-flow";
 
@@ -113,6 +114,14 @@ export interface DesktopApi {
     readonly stop: () => Promise<ListenerStatus>;
     readonly regenerateToken: () => Promise<ListenerStatus>;
     readonly getAgentConfigs: () => Promise<AgentConfigs>;
+  };
+  /** The browser extension's key, which web chats use. Separate from the agents' token. */
+  readonly webChats: {
+    readonly getStatus: () => Promise<WebChatStatus>;
+    /** Creates the key, or replaces it; the old one stops working at once. */
+    readonly newKey: () => Promise<WebChatStatus>;
+    readonly turnOff: () => Promise<WebChatStatus>;
+    readonly setAskBeforeReads: (ask: boolean) => Promise<WebChatStatus>;
   };
   readonly vscode: {
     readonly getStatus: () => Promise<ListenerStatus & { readonly latestContext: VsCodeContext | null }>;

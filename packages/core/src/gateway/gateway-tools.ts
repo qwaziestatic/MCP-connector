@@ -4,9 +4,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { result } from "../mcp/tool-result.js";
+import { auditCopy, result, textOf } from "../mcp/tool-result.js";
 import type { WorkflowService } from "../workflow/workflow.service.js";
-import type { WorkflowPreview } from "../workflow/workflow.types.js";
+import type { McpClientSource, WorkflowPreview } from "../workflow/workflow.types.js";
 import type { ExternalServerConfig } from "./external-server-config.js";
 import type { ExternalToolSource } from "./external-servers.js";
 
@@ -14,8 +14,6 @@ export const RUN_APPROVED_CALL_TOOL = "external_run_approved_call";
 export const EXTERNAL_TOOL_SEPARATOR = "__";
 /** Many agents refuse longer tool names. */
 const MAX_TOOL_NAME_LENGTH = 64;
-/** How much of a result the audit log keeps; the agent still gets all of it. */
-const AUDIT_TEXT_LIMIT = 2000;
 
 /** `<server id>__<tool>`, with characters agents reject replaced; null if too long. */
 export function externalToolName(serverId: string, toolName: string): string | null {
@@ -58,18 +56,17 @@ export function isExternalCall(preview: WorkflowPreview): boolean {
   return preview.action === "CALL" && payloadSchema.safeParse(preview.payload).success;
 }
 
-function textOf(callResult: CallToolResult): string {
-  return callResult.content
-    .map((item) => item.type === "text" ? item.text : `[${item.type}]`)
-    .join("\n");
-}
-
 /** Registers every connected server's tools, and the tool that runs approved calls. */
 export function registerExternalTools(
   server: McpServer,
-  dependencies: { readonly workflow: WorkflowService; readonly external?: ExternalToolSource }
+  dependencies: {
+    readonly workflow: WorkflowService;
+    readonly external?: ExternalToolSource;
+    /** Who the server is for; previews are labelled with it. */
+    readonly source?: McpClientSource;
+  }
 ): void {
-  const { workflow, external } = dependencies;
+  const { workflow, external, source = "mcp" } = dependencies;
 
   for (const { config, tools } of external?.connectedServers() ?? []) {
     const used = new Set<string>();
@@ -104,7 +101,7 @@ export function registerExternalTools(
             `${config.name}: ${tool.name}`,
             `Run "${tool.name}" on ${config.name}`,
             { ...payload },
-            "mcp"
+            source
           );
           return result({
             requiresApproval: true,
@@ -139,10 +136,9 @@ export function registerExternalTools(
       let full: CallToolResult | undefined;
       await workflow.executeApproved(previewId, async () => {
         full = await external!.callTool(call.server, call.tool, call.arguments);
-        const text = textOf(full);
-        if (full.isError === true) throw new Error(`${call.serverName} reported an error: ${text.slice(0, 500)}`);
+        if (full.isError === true) throw new Error(`${call.serverName} reported an error: ${textOf(full).slice(0, 500)}`);
         // The audit log keeps a shortened copy; the agent gets the whole result.
-        return { text: text.length > AUDIT_TEXT_LIMIT ? `${text.slice(0, AUDIT_TEXT_LIMIT)}…` : text };
+        return auditCopy(full);
       });
       return full as CallToolResult;
     }
