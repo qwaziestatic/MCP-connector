@@ -221,6 +221,34 @@ const checks = [
       await page.evaluate("window.desktopApi.mcp.stop()");
     }
   } },
+  { name: "browser key is refused until created and once turned off, and leaves the agents' token alone", needsVault: true, run: async (page) => {
+    const server = await page.evaluate("window.desktopApi.mcp.start()");
+    const answer = async (key) => {
+      const response = await fetch(server.url, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${key}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream"
+        },
+        body: JSON.stringify(initialize)
+      });
+      await response.body?.cancel();
+      return response.status;
+    };
+    try {
+      const before = await page.evaluate("window.desktopApi.webChats.getStatus()");
+      if (before.browserKey !== null) throw new Error("A new profile already has a browser key.");
+      if (before.askBeforeReads !== true) throw new Error("Asking before web chats read is not on by default.");
+      const { browserKey } = await page.evaluate("window.desktopApi.webChats.newKey()");
+      if (await answer(browserKey) !== 200) throw new Error("The new browser key was refused.");
+      await page.evaluate("window.desktopApi.webChats.turnOff()");
+      if (await answer(browserKey) !== 401) throw new Error("The browser key still works after it was turned off.");
+      if (await answer(server.bearerToken) !== 200) throw new Error("The agents' token stopped working.");
+    } finally {
+      await page.evaluate("window.desktopApi.mcp.stop()");
+    }
+  } },
   { name: "stdio relay says when the server is stopped, reaches it when running, and keeps the vault key", needsVault: true, run: async (page) => {
     // On Windows this runs before a new profile's key reaches the disk, which
     // is when a relay sharing the profile could replace it.

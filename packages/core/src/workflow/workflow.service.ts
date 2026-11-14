@@ -54,7 +54,8 @@ export class WorkflowService {
       target: validatedTarget,
       summary: validatedSummary,
       payload: validatedPayload,
-      requiresApproval: validatedAction !== "READ",
+      // A web chat's read is only queued when the user chose to approve its reads.
+      requiresApproval: validatedAction !== "READ" || source === "web",
       source,
       createdAt: new Date().toISOString()
     };
@@ -75,6 +76,7 @@ export class WorkflowService {
       action: preview.action,
       target: preview.target,
       status: "PREVIEWED",
+      source: preview.source,
       previewJson: JSON.stringify(preview),
       createdAt: preview.createdAt
     });
@@ -106,6 +108,7 @@ export class WorkflowService {
       action: pending.preview.action,
       target: pending.preview.target,
       status: "APPROVED",
+      source: pending.preview.source,
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
@@ -135,6 +138,7 @@ export class WorkflowService {
       action: pending.preview.action,
       target: pending.preview.target,
       status: "REJECTED",
+      source: pending.preview.source,
       previewJson: JSON.stringify(pending.preview),
       createdAt: new Date().toISOString()
     });
@@ -185,6 +189,7 @@ export class WorkflowService {
         action: pending.preview.action,
         target: pending.preview.target,
         status: "EXECUTED",
+        source: pending.preview.source,
         previewJson: JSON.stringify({ preview: pending.preview, result }),
         createdAt: new Date().toISOString()
       });
@@ -199,6 +204,7 @@ export class WorkflowService {
         action: pending.preview.action,
         target: pending.preview.target,
         status: "FAILED",
+        source: pending.preview.source,
         previewJson: JSON.stringify(pending.preview),
         createdAt: new Date().toISOString()
       });

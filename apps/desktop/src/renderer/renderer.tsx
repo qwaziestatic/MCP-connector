@@ -10,6 +10,7 @@ import type { AgentConfigs } from "../shared/desktop-api";
 import { describeAuditRecord } from "./audit-description";
 import { ConnectionsCard, ipcErrorMessage } from "./connections-card";
 import { ExternalServersCard } from "./external-servers-card";
+import { WebChatsCard } from "./web-chats-card";
 
 /** Agents that connect over HTTP, in the order their buttons appear. */
 const httpAgents: readonly { readonly key: keyof AgentConfigs; readonly name: string }[] = [
@@ -113,6 +114,7 @@ export function App(): JSX.Element {
       return search.length === 0
         || record.action.toLowerCase().includes(search)
         || record.target.toLowerCase().includes(search)
+        || record.source.toLowerCase().includes(search)
         || record.previewJson.toLowerCase().includes(search);
     });
   }, [auditRecords, auditSearch, auditStatus]);
@@ -580,6 +582,13 @@ export function App(): JSX.Element {
         )}
       </section>
 
+      <WebChatsCard
+        onError={setError}
+        copyText={async (label, value) => copyValue(label, value)}
+        copied={copied}
+        mcp={mcpStatus}
+      />
+
       <section className="card integrations-card">
         <div className="card-heading">
           <div>
@@ -619,7 +628,7 @@ export function App(): JSX.Element {
             <input
               value={auditSearch}
               onChange={(event) => setAuditSearch(event.target.value)}
-              placeholder="Target, action, or payload"
+              placeholder="Target, action, source, or payload"
             />
           </label>
           <label>
@@ -645,6 +654,7 @@ export function App(): JSX.Element {
                   <button className="audit-row" onClick={() => setExpandedAuditId(expandedAuditId === record.id ? null : record.id)}>
                     <span className={`status ${record.status.toLowerCase()}`}>{record.status}</span>
                     <strong>{record.action}</strong>
+                    <span className="audit-source" title="Who asked: UI is this window, MCP an agent, WEB a web chat">{record.source.toUpperCase()}</span>
                     <span className="audit-summary">
                       <span className="audit-target">{record.target}</span>
                       {description !== null && <span className="audit-description" title={description}>{description}</span>}

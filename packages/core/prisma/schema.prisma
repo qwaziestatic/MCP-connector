@@ -11,6 +11,7 @@ model AuditLog {
   action      String
   target      String
   status      String
+  source      String   @default("ui")
   previewJson String
   createdAt   DateTime @default(now())
 

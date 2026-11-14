@@ -85,6 +85,56 @@ describe("workflow persistence on a real SQLite database", () => {
       .toEqual(["APPROVED", "EXECUTED", "PREVIEWED"]);
   });
 
+  it("stores who asked with every preview and audit record", async () => {
+    const { workflow, repository } = await openDatabase();
+    const read = await workflow.createPreview("READ", "workspace_get_selected", "Read", { tool: "workspace_get_selected", arguments: {} }, "web");
+    await workflow.approve(read.id);
+    await workflow.executeApproved(read.id, async () => "done");
+    const rejected = await workflow.createPreview("CREATE", "Notion project page", "Create", {}, "mcp");
+    await workflow.reject(rejected.id);
+    await workflow.createPreview("CREATE", "Notion project page", "Create", {});
+
+    expect(await repository.get(read.id)).toMatchObject({ preview: { source: "web", requiresApproval: true } });
+    const records = await repository.list();
+    expect(records.filter((record) => record.source === "web").map((record) => record.status).sort())
+      .toEqual(["APPROVED", "EXECUTED", "PREVIEWED"]);
+    expect(records.filter((record) => record.source === "mcp").map((record) => record.status).sort())
+      .toEqual(["PREVIEWED", "REJECTED"]);
+    expect(records.filter((record) => record.source === "ui").map((record) => record.status)).toEqual(["PREVIEWED"]);
+  });
+
+  it("gives audit records from an older version the source their preview had", async () => {
+    const { prisma, repository } = await openDatabase();
+    // Put the database back to how the previous version left it.
+    await prisma.$executeRawUnsafe(`DELETE FROM "_McpConnectorMigration" WHERE "id" = '20261114120000_add_audit_log_source'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AuditLog" DROP COLUMN "source"`);
+    const preview = (source: string) => ({ id: "p", action: "CREATE", target: "t", summary: "s", payload: {}, source });
+    const rows: Array<[string, string]> = [
+      ["agent-previewed", JSON.stringify(preview("mcp"))],
+      ["agent-executed", JSON.stringify({ preview: preview("mcp"), result: { pageId: "1" } })],
+      ["window-previewed", JSON.stringify(preview("ui"))],
+      ["before-sources", JSON.stringify({ id: "p", action: "CREATE" })],
+      ["unreadable", "{ not json"]
+    ];
+    for (const [id, previewJson] of rows) {
+      await prisma.$executeRaw`
+        INSERT INTO "AuditLog" ("id", "action", "target", "status", "previewJson")
+        VALUES (${id}, 'CREATE', 't', 'PREVIEWED', ${previewJson})
+      `;
+    }
+
+    await applyDatabaseMigrations(prisma);
+
+    const sources = Object.fromEntries((await repository.list()).map((record) => [record.id, record.source]));
+    expect(sources).toEqual({
+      "agent-previewed": "mcp",
+      "agent-executed": "mcp",
+      "window-previewed": "ui",
+      "before-sources": "ui",
+      "unreadable": "ui"
+    });
+  });
+
   it("keeps approvals and rejections across a restart", async () => {
     const first = await openDatabase();
     const approved = await first.workflow.createPreview("CREATE", "Notion project page", "Create", { a: 1 });

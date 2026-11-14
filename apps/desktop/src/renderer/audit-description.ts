@@ -1,7 +1,7 @@
 // One short line for each audit record, saying what it was about. It is built
 // from the stored preview, so it never shows a call's secrets or a file's
-// contents: only the preview's summary and, for a call to another MCP server,
-// the argument that names what it works on.
+// contents: only the preview's summary and, for a call to another MCP server
+// or a web chat's read, the argument that names what it works on.
 import type { AuditRecord } from "@mcp-connector/core";
 
 const MAX_LENGTH = 120;
@@ -91,7 +91,7 @@ export function describeAuditRecord(record: Pick<AuditRecord, "previewJson">): s
   const parts: string[] = [];
   if (typeof preview.summary === "string" && oneLine(preview.summary).length > 0) parts.push(oneLine(preview.summary));
   const payload = preview.payload;
-  if (preview.action === "CALL" && isObject(payload) && isObject(payload.arguments)) {
+  if ((preview.action === "CALL" || preview.action === "READ") && isObject(payload) && isObject(payload.arguments)) {
     const argument = mainArgument(payload.arguments);
     if (argument !== null) parts.push(argument);
   }

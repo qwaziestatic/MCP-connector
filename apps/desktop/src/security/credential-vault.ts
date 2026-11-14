@@ -20,6 +20,8 @@ type CredentialFile = Record<string, string>;
 export type LocalSecretName =
   | "mcp-http-token"
   | "vscode-listener-token"
+  /** The browser extension's key; absent while web chats are turned off. */
+  | "browser-key"
   /** An external MCP server's environment variables and headers, as JSON. */
   | `external-server:${string}`;
 
@@ -27,6 +29,7 @@ export type LocalSecretName =
 export interface LocalSecretStore {
   getSecret(name: LocalSecretName): Promise<string | null>;
   saveSecret(name: LocalSecretName, value: string): Promise<void>;
+  removeSecret(name: LocalSecretName): Promise<void>;
 }
 
 export const NO_LINUX_KEYRING_MESSAGE = "MCP Connector needs your system's keyring to keep tokens safe, and none is "

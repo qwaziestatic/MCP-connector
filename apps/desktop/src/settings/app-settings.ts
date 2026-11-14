@@ -17,6 +17,8 @@ const appSettingsSchema = z.object({
   mcpServerEnabled: z.boolean().optional().catch(undefined),
   /** Whether the VS Code listener was running when the app last closed. */
   vscodeListenerEnabled: z.boolean().optional().catch(undefined),
+  /** "Ask before web chats read anything". On unless it is set to false. */
+  askBeforeWebReads: z.boolean().optional().catch(undefined),
   /** Each connector's settings, by connector id and then setting key. */
   connectorSettings: z.record(z.string(), z.record(z.string(), z.string())).optional().catch(undefined),
   /** Other MCP servers the user added. Their environment variables and headers are in the vault. */

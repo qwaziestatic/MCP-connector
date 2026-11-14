@@ -17,6 +17,7 @@ class MemorySecrets implements LocalSecretStore {
   readonly values = new Map<LocalSecretName, string>();
   async getSecret(name: LocalSecretName) { return this.values.get(name) ?? null; }
   async saveSecret(name: LocalSecretName, value: string) { this.values.set(name, value); }
+  async removeSecret(name: LocalSecretName) { this.values.delete(name); }
 }
 
 async function setup(options: { secrets?: MemorySecrets; directory?: string; mcpPort?: number } = {}) {
@@ -57,6 +58,20 @@ async function post(url: string, token: string): Promise<number> {
   });
   await response.body?.cancel();
   return response.status;
+}
+
+/** Calls a tool the way the browser extension does: one plain POST, no session. */
+async function callTool(url: string, key: string, name: string): Promise<{ status: number; body: string }> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${key}`,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream"
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } })
+  });
+  return { status: response.status, body: await response.text() };
 }
 
 describe("AgentConnectionManager", () => {
@@ -137,6 +152,77 @@ describe("AgentConnectionManager", () => {
     expect(after.enabled).toBe(true);
     expect(await post(after.url!, before.bearerToken)).toBe(401);
     expect(await post(after.url!, after.bearerToken)).toBe(200);
+  });
+
+  it("has no browser key until one is created, and refuses it once web chats are turned off", async () => {
+    const { manager, secrets } = await setup();
+    const { url } = await manager.startMcp();
+
+    expect(await manager.getWebChatStatus()).toEqual({ browserKey: null, askBeforeReads: true });
+    expect(secrets.values.has("browser-key")).toBe(false);
+    expect(await post(url!, "")).toBe(401);
+
+    const { browserKey } = await manager.newBrowserKey();
+    expect(browserKey).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(await post(url!, browserKey!)).toBe(200);
+
+    expect((await manager.turnOffWebChats()).browserKey).toBeNull();
+    expect(secrets.values.has("browser-key")).toBe(false);
+    expect(await post(url!, browserKey!)).toBe(401);
+    expect(await post(url!, "")).toBe(401);
+  });
+
+  it("replaces the browser key without touching the agents' token", async () => {
+    const { manager } = await setup();
+    const agent = await manager.startMcp();
+    const first = (await manager.newBrowserKey()).browserKey!;
+    const second = (await manager.newBrowserKey()).browserKey!;
+
+    expect(second).not.toBe(first);
+    expect(second).not.toBe(agent.bearerToken);
+    expect(await post(agent.url!, first)).toBe(401);
+    expect(await post(agent.url!, second)).toBe(200);
+    // The same server, still running, with the same token.
+    expect(await manager.getMcpStatus()).toEqual(agent);
+    expect(await post(agent.url!, agent.bearerToken)).toBe(200);
+
+    await manager.turnOffWebChats();
+    expect(await manager.getMcpStatus()).toEqual(agent);
+    expect(await post(agent.url!, agent.bearerToken)).toBe(200);
+  });
+
+  it("keeps the browser key across restarts and when the agents' token is replaced", async () => {
+    const first = await setup();
+    await first.manager.startMcp();
+    const { browserKey } = await first.manager.newBrowserKey();
+    const replaced = await first.manager.regenerateMcpToken();
+    expect(await post(replaced.url!, browserKey!)).toBe(200);
+    await first.manager.closeAll();
+
+    const second = await setup({ directory: first.directory, secrets: first.secrets });
+    const restarted = await second.manager.startMcp();
+    expect((await second.manager.getWebChatStatus()).browserKey).toBe(browserKey);
+    expect(await post(restarted.url!, browserKey!)).toBe(200);
+  });
+
+  it("asks before a web chat reads, unless the user turned that off", async () => {
+    const { manager, settings } = await setup();
+    const agent = await manager.startMcp();
+    const { browserKey } = await manager.newBrowserKey();
+
+    // The agent's read is answered at once; the web chat's waits, and carries no data.
+    expect((await callTool(agent.url!, agent.bearerToken, "workspace_get_selected")).body).toContain("No workspace is selected");
+    const asked = await callTool(agent.url!, browserKey!, "workspace_get_selected");
+    expect(asked.body).toContain("requiresApproval");
+    expect(asked.body).not.toContain("No workspace is selected");
+
+    // The running server follows the setting.
+    expect((await manager.setAskBeforeWebReads(false)).askBeforeReads).toBe(false);
+    expect((await settings.read()).askBeforeWebReads).toBe(false);
+    expect((await callTool(agent.url!, browserKey!, "workspace_get_selected")).body).toContain("No workspace is selected");
+
+    expect((await manager.setAskBeforeWebReads(true)).askBeforeReads).toBe(true);
+    expect((await callTool(agent.url!, browserKey!, "workspace_get_selected")).body).toContain("requiresApproval");
   });
 
   it("explains a busy port instead of failing with EADDRINUSE", async () => {

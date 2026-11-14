@@ -18,5 +18,6 @@ describe("embedded database migrations", () => {
 
     expect(unsafeStatements.some((statement) => statement.includes('CREATE TABLE IF NOT EXISTS "WorkflowPreview"'))).toBe(true);
     expect(unsafeStatements.some((statement) => statement.includes('ALTER TABLE "WorkflowPreview" ADD COLUMN "executingAt"'))).toBe(true);
+    expect(unsafeStatements.some((statement) => statement.includes('ALTER TABLE "AuditLog" ADD COLUMN "source"'))).toBe(true);
   });
 });

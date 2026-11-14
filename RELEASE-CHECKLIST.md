@@ -44,6 +44,11 @@ a real Windows or Linux machine, provider accounts, or release credentials.
       execution.
 - [ ] Restart the application and verify persisted preview state and audit
       history.
+- [ ] Under **Web chats**, create a key. A request made with it is marked
+      WEB in the pending approvals and the audit log, and a read-only tool
+      returns a preview until **Ask before web chats read anything** is
+      turned off. **New key** and **Turn off** leave a connected agent
+      working, and the old key is refused.
 - [ ] Upgrade from the previous release and verify the database remains intact.
 - [ ] Uninstall and verify the documented application-data retention behavior.
 

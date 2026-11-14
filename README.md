@@ -21,6 +21,8 @@ The repository contains the feature-complete MVP implementation:
   so adding a service does not touch the rest of the app (see "Adding a
   connector" below)
 - Authenticated loopback MCP HTTP and stdio transports
+- A separate key for web chats, through the browser extension, that can be
+  replaced or turned off without setting up agents again
 - Authenticated VS Code context listener and companion extension
 - Windows NSIS installer, Linux AppImage and .deb, and VSIX packaging
 
@@ -176,7 +178,9 @@ definition gives:
   existing one needs no new sign-in code;
 - `settings`, the values the user sets in the window, each with a `parse`
   function that explains a bad value;
-- `registerTools`, the service's MCP tools; and
+- `registerTools`, the service's MCP tools. A tool that makes a preview
+  passes on the `source` it is given, so the preview says whether an agent or
+  a web chat asked; and
 - `previews`, if the service's tools change anything: the preview is shown to
   the user, and `prepare` checks the sign-in and settings before an approval
   is used.
@@ -198,8 +202,16 @@ Mutating operations never execute silently. They follow this sequence:
 
 Filesystem access is limited to the workspace root explicitly selected by the
 user. MCP HTTP and VS Code listeners bind to loopback only and require
-bearer authentication. To report a security problem, see
-[SECURITY.md](./SECURITY.md).
+bearer authentication.
+
+Web chats use the browser extension's own key, created under **Web chats** in
+the app. Their requests follow the same sequence and are marked as a web
+chat's in the approval queue and the audit log. With **Ask before web chats
+read anything** on, which is the default, their read-only requests wait for
+approval too; agents' read-only tools still run at once. See "Web chats" in
+[DEPLOYMENT.md](./DEPLOYMENT.md).
+
+To report a security problem, see [SECURITY.md](./SECURITY.md).
 
 ## Privacy
 

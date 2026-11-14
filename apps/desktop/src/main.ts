@@ -243,6 +243,16 @@ function registerIpcHandlers(
     });
   });
 
+  ipcMain.handle("web-chats:get-status", () => connectionManager.getWebChatStatus());
+  ipcMain.handle("web-chats:new-key", () => connectionManager.newBrowserKey());
+  ipcMain.handle("web-chats:turn-off", () => connectionManager.turnOffWebChats());
+  ipcMain.handle("web-chats:set-ask-before-reads", (_event, ask: unknown) => {
+    if (typeof ask !== "boolean") {
+      throw new Error("The setting must be on or off.");
+    }
+    return connectionManager.setAskBeforeWebReads(ask);
+  });
+
   ipcMain.handle("vscode:get-status", () => connectionManager.getVsCodeStatus());
   ipcMain.handle("vscode:start", () => connectionManager.startVsCode());
   ipcMain.handle("vscode:stop", () => connectionManager.stopVsCode());
@@ -259,7 +269,7 @@ function showMainWindow(): void {
   window.focus();
 }
 
-/** Tells the user that an AI agent is waiting for their approval. */
+/** Tells the user that an AI agent or a web chat is waiting for their approval. */
 function announceApprovalRequest(preview: WorkflowPreview): void {
   const window = BrowserWindow.getAllWindows()[0];
   if (window !== undefined && !window.isFocused()) {
@@ -267,7 +277,7 @@ function announceApprovalRequest(preview: WorkflowPreview): void {
   }
   if (!Notification.isSupported()) return;
   const notification = new Notification({
-    title: "An AI agent is asking for approval",
+    title: preview.source === "web" ? "A web chat is asking for approval" : "An AI agent is asking for approval",
     body: `${preview.summary}. Open MCP Connector to approve or reject it.`
   });
   shownNotifications.add(notification);
@@ -426,7 +436,7 @@ async function startDesktopApp(): Promise<void> {
     }
     createMainWindow();
     workflowService.subscribe(createApprovalNotifier(await workflowService.listPending(), (preview) => {
-      log.info(`An agent asked for approval: ${preview.summary}`);
+      log.info(`${preview.source === "web" ? "A web chat" : "An agent"} asked for approval: ${preview.summary}`);
       announceApprovalRequest(preview);
     }));
   } catch (error) {

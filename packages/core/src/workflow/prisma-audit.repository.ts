@@ -17,6 +17,7 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
         action: record.action,
         target: record.target,
         status: record.status,
+        source: record.source,
         previewJson: record.previewJson,
         createdAt: new Date(record.createdAt)
       }
@@ -33,6 +34,7 @@ export class PrismaAuditRepository implements AuditRepository, WorkflowPreviewRe
       action: record.action as AuditRecord["action"],
       target: record.target,
       status: record.status as AuditRecord["status"],
+      source: record.source as AuditRecord["source"],
       previewJson: record.previewJson,
       createdAt: record.createdAt.toISOString()
     }));

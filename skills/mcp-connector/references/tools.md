@@ -38,6 +38,15 @@ own inputs. Read-only tools run at once; the others return a preview first.
 | --- | --- | --- |
 | `external_run_approved_call` | `previewId` | Runs an approved call to another server's tool, exactly as approved, once, and returns that server's result. |
 
+## Web chats
+
+A web chat that reaches MCP Connector through its browser extension gets the
+tools above, and its requests are marked as a web chat's in the app. While
+the user keeps **Ask before web chats read anything** on, its read-only tools
+return a preview too, with no data, and `web_run_approved_read` (input:
+`previewId`) runs the approved read once and returns the result. Agents are
+not offered that tool: their read-only tools run at once.
+
 ## Messages you may see
 
 | Message contains | What to tell the user |

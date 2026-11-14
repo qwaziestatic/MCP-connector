@@ -5,7 +5,7 @@
 // definitions, so adding a service means adding one definition.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { WorkflowService } from "../workflow/workflow.service.js";
-import type { WorkflowPreview } from "../workflow/workflow.types.js";
+import type { McpClientSource, WorkflowPreview } from "../workflow/workflow.types.js";
 import type { ConnectorTokenProvider } from "./connector.types.js";
 
 /** How a service signs in. The desktop app has one sign-in flow per kind. */
@@ -40,6 +40,8 @@ export interface ConnectorRuntime {
 export interface ConnectorToolContext {
   readonly runtime: ConnectorRuntime;
   readonly workflow: WorkflowService;
+  /** Who the tools are registered for: an agent or a web chat. Previews are labelled with it. */
+  readonly source: McpClientSource;
 }
 
 /** Runs the approved previews a connector created. */
