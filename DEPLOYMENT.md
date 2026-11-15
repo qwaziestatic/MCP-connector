@@ -209,8 +209,13 @@ While the MCP server runs, the app writes its address (not its token) to
 
 ### Web chats
 
-The browser extension connects web chats to the same MCP server, with a key
-of its own. Under **Web chats** in the app, **Create key** generates it. It is
+The Chrome extension in
+[`apps/chrome-extension`](./apps/chrome-extension/README.md) connects web
+chats to the same MCP server, with a key of its own. `npm run build:chrome`
+builds it into `apps/chrome-extension/dist`, the folder Chrome loads, and
+`npm run package:chrome` zips that folder as
+`release/mcp-connector-chrome-<version>.zip`. Its README has the install
+steps. Under **Web chats** in the app, **Create key** generates it. It is
 stored encrypted in the credential vault, like the agents' token, and the
 extension is given the key and the server's port. **New key** replaces it and
 **Turn off** removes it; the old key is refused at once. Neither restarts the
@@ -329,6 +334,8 @@ and also builds the extension and the skill:
   and `apps/desktop/release/MCP-Connector-<version>-amd64.deb`, kept as the
   CI run's `linux-packages` artifact for testing on a real Linux PC
 - VS Code extension (release only): `apps/vscode-extension/mcp-connector-vscode-<version>.vsix`
+- Chrome extension: built and tested with the workspace; `npm run package:chrome`
+  zips it, and the release workflow does not attach it yet
 - Workspace tests, type checks, and production builds pass.
 
 The artifacts are not yet production releases. The Windows installer is

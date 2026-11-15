@@ -21,6 +21,7 @@ a real Windows or Linux machine, provider accounts, or release credentials.
       the unpacked app each pass the smoke test with an unlocked keyring, the
       first two with Ubuntu's AppArmor user-namespace restriction in place.
 - [ ] `npm run package:vscode` produces the expected VSIX.
+- [ ] `npm run package:chrome` produces `release/mcp-connector-chrome-<version>.zip`.
 - [ ] No secrets, certificates, databases, or generated artifacts are tracked.
 
 ## Signing and branding
@@ -76,6 +77,24 @@ Use a desktop Ubuntu 24.04 or newer, with GNOME and its keyring. The CI run's
       temporary mount.
 - [ ] `sudo apt remove <package>` removes the app and its AppArmor profile,
       and keeps `~/.config/@mcp-connector/desktop`.
+
+## Chrome extension
+
+Use a signed-in ChatGPT account in Chrome; the automated tests cannot.
+
+- [ ] Load `apps/chrome-extension/dist` with **Load unpacked**. The options
+      page says connected, app not running, and wrong key in each case.
+- [ ] In a ChatGPT chat, the side panel lists the tools with none ticked.
+      **Insert instructions** fills the chat box with the ticked tools only.
+- [ ] A reply with an `mcp-call` block is outlined and appears in the panel
+      once the reply is finished. A request for an unticked tool is refused.
+- [ ] **Run** shows "Waiting for your approval in MCP Connector"; approving
+      in the app runs it once, and rejecting says so. **Put result in chat
+      box** fills the chat box and does not send.
+- [ ] Opening another chat in the tab clears the ticks.
+- [ ] If any of these fail because ChatGPT's page changed, fix
+      `apps/chrome-extension/src/selectors.ts`; **Paste a request** and
+      **Copy result** must still work meanwhile.
 
 ## Provider validation
 

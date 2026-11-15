@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MCP Connector for web chats: options</title>
+    <link rel="stylesheet" href="ui.css">
+  </head>
+  <body class="options">
+    <main>
+      <h1>MCP Connector for web chats</h1>
+      <p class="muted">
+        This extension talks only to the MCP Connector app on this computer. In the app, under
+        <strong>Web chats</strong>, click <strong>Create key</strong>, then paste the key and the port here.
+      </p>
+
+      <form id="pairing" autocomplete="off">
+        <label for="browser-key">Browser key</label>
+        <input id="browser-key" type="password" autocomplete="off" spellcheck="false" required
+               placeholder="Paste the key from MCP Connector">
+        <p id="saved" class="muted small"></p>
+
+        <label for="port">Port</label>
+        <input id="port" type="number" min="1" max="65535" step="1" required>
+        <p class="muted small">MCP Connector shows the port next to the key. It is 47820 unless you changed it.</p>
+
+        <button type="submit" class="primary">Save and test</button>
+      </form>
+
+      <p id="status" class="status" role="status">Checking…</p>
+      <div id="status-actions" class="actions"></div>
+
+      <h2>What this extension does</h2>
+      <ul class="muted">
+        <li>It reads the ChatGPT page to find requests written as <code>mcp-call</code> blocks, and puts text in the chat box when you ask.</li>
+        <li>Nothing runs until you click <strong>Run</strong> in the side panel, and only for tools you ticked for that chat.</li>
+        <li>Whatever needs approval still waits for you in the MCP Connector window.</li>
+        <li>It sends nothing anywhere except to MCP Connector at 127.0.0.1 on this computer.</li>
+      </ul>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

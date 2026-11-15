@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MCP Connector</title>
+    <link rel="stylesheet" href="ui.css">
+  </head>
+  <body class="panel">
+    <header>
+      <h1>MCP Connector</h1>
+      <p id="status" class="status" role="status">Checking…</p>
+      <div id="status-actions" class="actions"></div>
+    </header>
+
+    <p id="no-chat" class="muted" hidden>Open a chat on chatgpt.com in this window to use your tools there.</p>
+
+    <section id="tools-section" hidden>
+      <h2>Tools for this chat</h2>
+      <p class="muted small">
+        Tick the tools this chat may ask for. None are ticked to begin with, and a request for any other
+        tool is refused.
+      </p>
+      <div id="tools"></div>
+      <div class="actions">
+        <button id="insert-instructions" type="button" class="primary" disabled>Insert instructions</button>
+      </div>
+      <p id="notice" class="notice" role="status" hidden></p>
+    </section>
+
+    <section id="requests-section" hidden>
+      <h2>Requests</h2>
+      <p id="page-note" class="muted small"></p>
+      <div id="requests"></div>
+      <details id="paste">
+        <summary>Paste a request</summary>
+        <p class="muted small">
+          If a request in the chat does not show up here, copy the <code>mcp-call</code> block from the chat and
+          paste it below.
+        </p>
+        <textarea id="paste-text" rows="5" spellcheck="false"
+                  placeholder='{"tool": "…", "arguments": {}}'></textarea>
+        <div class="actions">
+          <button id="paste-add" type="button">Check request</button>
+        </div>
+      </details>
+    </section>
+
+    <script src="panel.js"></script>
+  </body>
+</html>
