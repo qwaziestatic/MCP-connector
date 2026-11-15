@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@mcp-connector/desktop",
-    "build": "npm run build --workspace=@mcp-connector/core && npm run build --workspace=@mcp-connector/desktop && npm run build --workspace=apps/vscode-extension",
+    "build": "npm run build --workspace=@mcp-connector/core && npm run build --workspace=@mcp-connector/desktop && npm run build --workspace=apps/vscode-extension && npm run build --workspace=apps/chrome-extension",
     "package:win": "npm run package:win --workspace=@mcp-connector/desktop",
     "package:linux": "npm run package:linux --workspace=@mcp-connector/desktop",
     "typecheck": "npm run build --workspace=@mcp-connector/core && npm run typecheck --workspaces --if-present",
@@ -26,7 +26,9 @@
     "prisma:migrate": "npm run prisma:migrate --workspace=@mcp-connector/core",
     "build:vscode": "npm run build --workspace=apps/vscode-extension",
     "package:vscode": "npm run package --workspace=apps/vscode-extension",
-    "package:skill": "node scripts/package-skill.mjs"
+    "package:skill": "node scripts/package-skill.mjs",
+    "build:chrome": "npm run build --workspace=apps/chrome-extension",
+    "package:chrome": "npm run build --workspace=apps/chrome-extension && node scripts/package-chrome.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

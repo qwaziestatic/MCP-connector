@@ -23,8 +23,11 @@ The repository contains the feature-complete MVP implementation:
 - Authenticated loopback MCP HTTP and stdio transports
 - A separate key for web chats, through the browser extension, that can be
   replaced or turned off without setting up agents again
+- A Chrome extension that lets a chat on chatgpt.com ask for tools: you tick
+  the tools a chat may use and run each request yourself
 - Authenticated VS Code context listener and companion extension
-- Windows NSIS installer, Linux AppImage and .deb, and VSIX packaging
+- Windows NSIS installer, Linux AppImage and .deb, VSIX and Chrome extension
+  packaging
 
 ## Install
 
@@ -115,6 +118,12 @@ VS Code extension:
 npm run package:vscode
 ```
 
+Chrome extension, as `release/mcp-connector-chrome-<version>.zip`:
+
+```powershell
+npm run package:chrome
+```
+
 The generated installer, VSIX, and other build artifacts are ignored by Git.
 Publish them as release assets rather than committing them to the source tree.
 
@@ -148,6 +157,22 @@ the app, paste the `"mcpServers"` block from a server's README, for example:
   folders, and proxy settings) plus its own variables.
 - MCP Connector starts the command you paste, so add only servers you trust.
   Servers started with `npx` need Node.js installed.
+
+## Web chats
+
+A chat on chatgpt.com can ask for the same tools through the Chrome
+extension in [`apps/chrome-extension`](./apps/chrome-extension/README.md).
+Its README has the install steps and says exactly what leaves your computer.
+
+- In the app, **Create key** under **Web chats** makes the extension's own
+  key. Paste it, and the port, into the extension's options.
+- In the extension's side panel you tick the tools a chat may use; none are
+  ticked to begin with. The chat writes a request, and it runs only when you
+  click **Run** in the side panel.
+- A request that needs approval waits in the app as "Web chat". With **Ask
+  before web chats read anything** on, which is the default, that includes
+  read-only tools.
+- You put the result in the chat box and press Send yourself.
 
 ## Agent skill
 

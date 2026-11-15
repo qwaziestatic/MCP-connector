@@ -1,0 +1,28 @@
+{
+  "name": "mcp-connector-chrome",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "Dagim Tsegaye",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qwaziestatic/MCP-connector.git",
+    "directory": "apps/chrome-extension"
+  },
+  "private": true,
+  "description": "Chrome extension that lets web chats ask for MCP Connector's tools. Every approval is still made in the app.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"src/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@mcp-connector/core": "0.1.0",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.16.0",
+    "typescript": "^5.7.2"
+  }
+}
