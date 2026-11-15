@@ -52,7 +52,7 @@ h2 { margin-bottom: 0; font-size: 18px; overflow-wrap: anywhere; }
 .file-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .audit-row strong, .audit-row time { flex-shrink: 0; }
 .audit-row strong { min-width: 56px; }
-.audit-source { flex-shrink: 0; min-width: 34px; color: #91a4ba; font-size: 11px; font-weight: 800; }
+.audit-source { flex-shrink: 0; min-width: 62px; color: #91a4ba; font-size: 11px; font-weight: 800; }
 .audit-summary { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 7px 0; }
 .audit-target, .audit-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .audit-description { color: #91a4ba; font-size: 11px; }

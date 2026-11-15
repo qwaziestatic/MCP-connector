@@ -95,8 +95,10 @@ describe("MCP protocol integration", () => {
         throw new Error("Expected preview tool to return text content.");
       }
       const previewPayload = JSON.parse(previewText.text) as {
+        readonly executeTool: string;
         readonly preview: { readonly id: string; readonly payload: { readonly notionBlocks: unknown } };
       };
+      expect(previewPayload.executeTool).toBe("notion_create_project_page");
       const pendingResult = await client.callTool({
         name: "workflow_preview_status",
         arguments: { previewId: previewPayload.preview.id }

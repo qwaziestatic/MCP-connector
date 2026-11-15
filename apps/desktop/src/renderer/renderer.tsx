@@ -7,7 +7,7 @@ import type {
 } from "@mcp-connector/core";
 import type { VsCodeContext } from "../security/vscode-context-server";
 import type { AgentConfigs } from "../shared/desktop-api";
-import { describeAuditRecord } from "./audit-description";
+import { describeAuditRecord, sourceLabel } from "./audit-description";
 import { ConnectionsCard, ipcErrorMessage } from "./connections-card";
 import { ExternalServersCard } from "./external-servers-card";
 import { WebChatsCard } from "./web-chats-card";
@@ -114,7 +114,7 @@ export function App(): JSX.Element {
       return search.length === 0
         || record.action.toLowerCase().includes(search)
         || record.target.toLowerCase().includes(search)
-        || record.source.toLowerCase().includes(search)
+        || sourceLabel(record.source).toLowerCase().includes(search)
         || record.previewJson.toLowerCase().includes(search);
     });
   }, [auditRecords, auditSearch, auditStatus]);
@@ -445,7 +445,7 @@ export function App(): JSX.Element {
           <div className="integration-row" key={item.preview.id}>
             <div className="queue-item">
               <strong>{item.preview.action} · {item.preview.target}</strong>
-              <p className="muted">{item.preview.source.toUpperCase()} · {item.preview.summary}</p>
+              <p className="muted">{sourceLabel(item.preview.source)} · {item.preview.summary}</p>
               <pre className="queue-details">{formatPayload(item.preview.payload)}</pre>
             </div>
             <div className="actions">
@@ -654,7 +654,7 @@ export function App(): JSX.Element {
                   <button className="audit-row" onClick={() => setExpandedAuditId(expandedAuditId === record.id ? null : record.id)}>
                     <span className={`status ${record.status.toLowerCase()}`}>{record.status}</span>
                     <strong>{record.action}</strong>
-                    <span className="audit-source" title="Who asked: UI is this window, MCP an agent, WEB a web chat">{record.source.toUpperCase()}</span>
+                    <span className="audit-source" title="Who asked">{sourceLabel(record.source)}</span>
                     <span className="audit-summary">
                       <span className="audit-target">{record.target}</span>
                       {description !== null && <span className="audit-description" title={description}>{description}</span>}

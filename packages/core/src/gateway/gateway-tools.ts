@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { auditCopy, result, textOf } from "../mcp/tool-result.js";
+import { auditCopy, previewResult, textOf } from "../mcp/tool-result.js";
 import type { WorkflowService } from "../workflow/workflow.service.js";
 import type { McpClientSource, WorkflowPreview } from "../workflow/workflow.types.js";
 import type { ExternalServerConfig } from "./external-server-config.js";
@@ -103,11 +103,11 @@ export function registerExternalTools(
             { ...payload },
             source
           );
-          return result({
-            requiresApproval: true,
+          return previewResult(
             preview,
-            next: `Ask the user to approve this in MCP Connector. Poll workflow_preview_status; when it is APPROVED, call ${RUN_APPROVED_CALL_TOOL} with this previewId. If it is REJECTED, stop.`
-          });
+            RUN_APPROVED_CALL_TOOL,
+            `Ask the user to approve this in MCP Connector. Poll workflow_preview_status; when it is APPROVED, call ${RUN_APPROVED_CALL_TOOL} with this previewId. If it is REJECTED, stop.`
+          );
         }
       );
     }

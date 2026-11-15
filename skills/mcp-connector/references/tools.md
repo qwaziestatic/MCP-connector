@@ -1,7 +1,9 @@
 # MCP Connector tools
 
 Read-only tools change nothing. Every tool that changes something has a
-preview step that the user approves in the MCP Connector window.
+preview step that the user approves in the MCP Connector window. A preview's
+answer has `requiresApproval`, the `preview` with its `id`, and `executeTool`:
+the name of the tool to call with that `previewId` once it is `APPROVED`.
 
 ## Workspace
 

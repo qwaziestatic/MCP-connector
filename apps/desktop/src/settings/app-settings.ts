@@ -17,6 +17,12 @@ const appSettingsSchema = z.object({
   mcpServerEnabled: z.boolean().optional().catch(undefined),
   /** Whether the VS Code listener was running when the app last closed. */
   vscodeListenerEnabled: z.boolean().optional().catch(undefined),
+  /**
+   * Set when the user turns web chats off, and cleared by a new browser key.
+   * While it is set no browser key is accepted, even one still in the vault
+   * because it could not be removed.
+   */
+  webChatsTurnedOff: z.boolean().optional().catch(undefined),
   /** "Ask before web chats read anything". On unless it is set to false. */
   askBeforeWebReads: z.boolean().optional().catch(undefined),
   /** Each connector's settings, by connector id and then setting key. */

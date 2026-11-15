@@ -172,6 +172,50 @@ describe("AgentConnectionManager", () => {
     expect(await post(url!, "")).toBe(401);
   });
 
+  it("stays turned off until a new key is created, even if the old key cannot be removed from the vault", async () => {
+    const first = await setup();
+    const { url } = await first.manager.startMcp();
+    const { browserKey } = await first.manager.newBrowserKey();
+    first.secrets.removeSecret = async () => { throw new Error("The vault is locked."); };
+
+    await expect(first.manager.turnOffWebChats()).rejects.toThrow("Web chats are turned off, but the old key could not be removed");
+    expect(first.secrets.values.get("browser-key")).toBe(browserKey);
+    expect(await post(url!, browserKey!)).toBe(401);
+    // Reading the status must not bring the key back from the vault.
+    expect((await first.manager.getWebChatStatus()).browserKey).toBeNull();
+    expect(await post(url!, browserKey!)).toBe(401);
+
+    // Not after the server restarts, and not after the app does.
+    const restartedServer = await first.manager.regenerateMcpToken();
+    expect(await post(restartedServer.url!, browserKey!)).toBe(401);
+    await first.manager.closeAll();
+    const second = await setup({ directory: first.directory, secrets: first.secrets });
+    const restartedApp = await second.manager.startMcp();
+    expect((await second.manager.getWebChatStatus()).browserKey).toBeNull();
+    expect(await post(restartedApp.url!, browserKey!)).toBe(401);
+
+    // Only a new key turns web chats on again, and the old one stays refused.
+    const fresh = (await second.manager.newBrowserKey()).browserKey!;
+    expect(fresh).not.toBe(browserKey);
+    expect(await post(restartedApp.url!, fresh)).toBe(200);
+    expect(await post(restartedApp.url!, browserKey!)).toBe(401);
+    await second.manager.closeAll();
+    const third = await setup({ directory: first.directory, secrets: first.secrets });
+    expect((await third.manager.getWebChatStatus()).browserKey).toBe(fresh);
+  });
+
+  it("stays turned off for this session when neither the settings nor the vault can be written", async () => {
+    const { manager, secrets, settings } = await setup();
+    const { url } = await manager.startMcp();
+    const { browserKey } = await manager.newBrowserKey();
+    secrets.removeSecret = async () => { throw new Error("The vault is locked."); };
+    settings.update = async () => { throw new Error("The disk is full."); };
+
+    await expect(manager.turnOffWebChats()).rejects.toThrow("The disk is full. The vault is locked.");
+    expect((await manager.getWebChatStatus()).browserKey).toBeNull();
+    expect(await post(url!, browserKey!)).toBe(401);
+  });
+
   it("replaces the browser key without touching the agents' token", async () => {
     const { manager } = await setup();
     const agent = await manager.startMcp();

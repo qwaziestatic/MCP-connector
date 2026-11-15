@@ -180,7 +180,8 @@ definition gives:
   function that explains a bad value;
 - `registerTools`, the service's MCP tools. A tool that makes a preview
   passes on the `source` it is given, so the preview says whether an agent or
-  a web chat asked; and
+  a web chat asked, and answers with `previewResult`, naming the tool that
+  runs the preview once it is approved; and
 - `previews`, if the service's tools change anything: the preview is shown to
   the user, and `prepare` checks the sign-in and settings before an approval
   is used.
@@ -220,6 +221,12 @@ its own that sees your data. It talks only to the services you connect: GitHub,
 Notion (through the sign-in service, which passes tokens through without
 storing them), and the MCP servers you add. Your settings, approvals, and audit
 log stay on your computer.
+
+The audit log keeps each request as you saw it, with its arguments, and what
+came of it. For a call to another MCP server and for a web chat's read, that
+is a shortened copy of the tool's result, up to 2,000 characters; the agent
+or web chat that asked gets the whole result. The log is in the app's
+database, on this computer only.
 
 ## License
 

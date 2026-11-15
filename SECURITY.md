@@ -18,7 +18,10 @@ published with credit to you, unless you prefer otherwise.
   tools.
 - Every tool that changes something, including tools from other MCP servers
   you add, waits for your approval in the app and runs once, exactly as
-  approved. The audit log records each step.
+  approved. The audit log records each step. It keeps each request with its
+  arguments and, for calls to other MCP servers and web chats' reads, a
+  shortened copy of the tool's result (up to 2,000 characters). It stays in
+  the app's database on this computer and is sent nowhere.
 - Sign-in tokens, the app's own tokens and the keys of other MCP servers are
   encrypted by your system: Windows' data protection (DPAPI), or GNOME Keyring
   or KWallet on Linux. They are never stored in plain files, and on Linux

@@ -4,6 +4,13 @@
 // or a web chat's read, the argument that names what it works on.
 import type { AuditRecord } from "@mcp-connector/core";
 
+/** Who asked, as the queue and the audit list show it. */
+const SOURCE_LABELS: Readonly<Record<string, string>> = { ui: "App", mcp: "Agent", web: "Web chat" };
+
+export function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] ?? source;
+}
+
 const MAX_LENGTH = 120;
 const MAX_ARGUMENT_LENGTH = 80;
 
