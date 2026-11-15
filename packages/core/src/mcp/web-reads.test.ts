@@ -93,8 +93,9 @@ async function setUp(options: { askBeforeWebReads?: () => boolean; external?: Ex
 }
 
 const text = (callResult: CallToolResult) => callResult.content.map((item) => item.type === "text" ? item.text : "").join("");
-const previewOf = (callResult: CallToolResult) =>
-  (JSON.parse(text(callResult)) as { requiresApproval: boolean; preview: WorkflowPreview }).preview;
+const answerOf = (callResult: CallToolResult) =>
+  JSON.parse(text(callResult)) as { requiresApproval: boolean; preview: WorkflowPreview; executeTool: string };
+const previewOf = (callResult: CallToolResult) => answerOf(callResult).preview;
 
 describe("reads from web chats", () => {
   it("returns a READ preview instead of the data, and the data only after approval, once", async () => {
@@ -105,6 +106,7 @@ describe("reads from web chats", () => {
     expect(text(asked)).not.toContain("README.md");
     expect(text(asked)).not.toContain("Private notes");
     const preview = previewOf(asked);
+    expect(answerOf(asked)).toMatchObject({ requiresApproval: true, executeTool: "web_run_approved_read" });
     expect(preview).toMatchObject({
       action: "READ",
       target: "filesystem_inspect_workspace",
@@ -214,6 +216,29 @@ describe("reads from web chats", () => {
     expect(previewOf(await web.call("notes__add_note", { title: "Plan" }))).toMatchObject({ action: "CALL", source: "web" });
     expect(previewOf(await agent.call("notion_create_project_page_preview", { title: "Plan", markdown: "x" })).source).toBe("mcp");
     expect(previewOf(await agent.call("notes__add_note", { title: "Plan" })).source).toBe("mcp");
+  });
+
+  it("names the tool that runs each preview, and that tool exists for the client that asked", async () => {
+    const { external } = await notesServer();
+    const { connect } = await setUp({ external });
+    for (const source of ["web", "mcp"] as const) {
+      const client = await connect(source);
+      const tools = (await client.client.listTools()).tools.map((tool) => tool.name);
+      const answers = [
+        answerOf(await client.call("notion_create_project_page_preview", { title: "Plan", markdown: "x" })),
+        answerOf(await client.call("notes__add_note", { title: "Plan" })),
+        ...(source === "web" ? [answerOf(await client.call("notes__list_notes")), answerOf(await client.call("workspace_get_selected"))] : [])
+      ];
+      expect(answers.map((answer) => answer.executeTool)).toEqual([
+        "notion_create_project_page",
+        "external_run_approved_call",
+        ...(source === "web" ? ["web_run_approved_read", "web_run_approved_read"] : [])
+      ]);
+      for (const answer of answers) {
+        expect(answer.requiresApproval).toBe(true);
+        expect(tools).toContain(answer.executeTool);
+      }
+    }
   });
 
   it("asks before another MCP server's read-only tools too", async () => {

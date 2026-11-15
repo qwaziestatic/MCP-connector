@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { result } from "../mcp/tool-result.js";
+import { previewResult, result } from "../mcp/tool-result.js";
 import type { ConnectorDefinition, ConnectorRuntime } from "./connector-definition.js";
 import { executeApprovedPreview } from "./connector-definition.js";
 import type { ConnectorTokenProvider, NotionConnector } from "./connector.types.js";
@@ -14,6 +14,7 @@ import {
 } from "./notion-page.js";
 
 export const NOTION_DATABASE_SETTING = "databaseId";
+const CREATE_PAGE_TOOL = "notion_create_project_page";
 
 export function createNotionDefinition(options: {
   /** Replaceable in tests. */
@@ -71,16 +72,15 @@ export function createNotionDefinition(options: {
         async ({ title, markdown }) => {
           // Report a missing sign-in or database now, not after the user approved.
           await connect(runtime);
-          const preview = await createNotionPagePreview(workflow, { title, markdown }, source);
-          return result({
-            requiresApproval: true,
-            preview
-          });
+          return previewResult(
+            await createNotionPagePreview(workflow, { title, markdown }, source),
+            CREATE_PAGE_TOOL
+          );
         }
       );
 
       server.registerTool(
-        "notion_create_project_page",
+        CREATE_PAGE_TOOL,
         {
           title: "Create approved Notion project page",
           description: "Execute an already approved Notion page preview. The preview ID must have explicit HITL approval.",

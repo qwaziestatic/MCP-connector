@@ -201,6 +201,8 @@ Non-secret settings live in `settings.json` in the app's user-data folder:
   you start or stop each listener, so they restart on the next launch.
 - `askBeforeWebReads`, the **Ask before web chats read anything** choice. It
   is on unless this is `false`.
+- `webChatsTurnedOff`, set by **Turn off** under **Web chats** and cleared by
+  a new key.
 
 While the MCP server runs, the app writes its address (not its token) to
 `mcp-endpoint.json` in the same folder.
@@ -214,15 +216,22 @@ extension is given the key and the server's port. **New key** replaces it and
 **Turn off** removes it; the old key is refused at once. Neither restarts the
 server or changes the agents' token, and **New token** does not change the
 browser key. Until a key is created, the server accepts only the agents'
-token.
+token. **Turn off** is also saved as `webChatsTurnedOff` in `settings.json`,
+so if the key could not be removed from the vault it is still refused, also
+after a restart, until **Create key** makes a new one.
+
+Every tool that makes a preview answers with `requiresApproval`, the
+`preview`, and `executeTool`: the name of the tool that runs that preview
+once it is approved. The extension uses it to finish an approved request, so
+it does not need to know the tools by name.
 
 A request made with the browser key gets the same tools as an agent's, with
 two differences:
 
 - Its previews and audit records have the source `web`. An agent's have
-  `mcp` and the app's own have `ui`. The source is shown in the pending
-  approvals and in the audit log, and the app notifies you about a web chat's
-  request as it does about an agent's.
+  `mcp` and the app's own have `ui`. The pending approvals and the audit log
+  show them as "Web chat", "Agent" and "App", and the app notifies you about
+  a web chat's request as it does about an agent's.
 - While **Ask before web chats read anything** is on, which it is by
   default, a read-only tool does not answer at once. It returns a preview
   with the action `READ` and no data. Once you approve it,

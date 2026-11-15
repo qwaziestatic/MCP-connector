@@ -102,9 +102,13 @@ describe("tools from other MCP servers", () => {
   it("runs a tool that changes something only after approval, exactly as approved, once", async () => {
     const { call, text, workflow, writes } = await setUp();
     const previewed = await call("notes__add_note", { title: "Plan", body: "ship it" });
-    const { preview } = JSON.parse(text(previewed)) as { preview: { id: string; target: string; payload: unknown } };
+    const { preview, executeTool } = JSON.parse(text(previewed)) as {
+      preview: { id: string; target: string; payload: unknown };
+      executeTool: string;
+    };
 
     expect(writes).toEqual([]);
+    expect(executeTool).toBe("external_run_approved_call");
     expect(preview.target).toBe("Notes: add_note");
     expect(preview.payload).toEqual({ server: "notes", serverName: "Notes", tool: "add_note", arguments: { title: "Plan", body: "ship it" } });
 

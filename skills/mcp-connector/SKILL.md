@@ -35,7 +35,9 @@ Tools that change something come in two steps: a **preview** tool, and an
 **execute** tool that only works after the user approves the preview in the
 app. The steps are always:
 
-1. Call the preview tool. It changes nothing.
+1. Call the preview tool. It changes nothing. Its answer has the preview's
+   `id`, which is the `previewId`, and `executeTool`, the name of the execute
+   tool for it.
 2. Tell the user, in one or two sentences, what is waiting and that they
    approve or reject it in the MCP Connector window. The app shows a
    notification.

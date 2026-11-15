@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeAuditRecord, mainArgument } from "./audit-description";
+import { describeAuditRecord, mainArgument, sourceLabel } from "./audit-description";
 
 function record(value: unknown): { previewJson: string } {
   return { previewJson: JSON.stringify(value) };
@@ -13,6 +13,13 @@ function externalCall(args: Record<string, unknown>) {
     payload: { server: "files", serverName: "files", tool: "write_file", arguments: args }
   };
 }
+
+describe("sourceLabel", () => {
+  it("says who asked in plain words", () => {
+    expect(["ui", "mcp", "web"].map(sourceLabel)).toEqual(["App", "Agent", "Web chat"]);
+    expect(sourceLabel("something-newer")).toBe("something-newer");
+  });
+});
 
 describe("describeAuditRecord", () => {
   it("gives a Notion page's summary, not its blocks", () => {

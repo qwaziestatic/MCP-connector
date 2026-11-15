@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { WorkflowPreview } from "../workflow/workflow.types.js";
 
 export interface TextResult {
   readonly [key: string]: unknown;
@@ -18,6 +19,24 @@ export function result(value: unknown): TextResult {
     };
   }
   return textResult;
+}
+
+/**
+ * What every tool that makes a preview answers. `executeTool` names the tool
+ * that runs the preview once the user approved it, so a client can finish an
+ * approved preview without knowing each tool by name.
+ */
+export function previewResult(
+  preview: WorkflowPreview,
+  executeTool: string,
+  next?: string
+): TextResult {
+  return result({
+    requiresApproval: true,
+    preview,
+    executeTool,
+    ...(next === undefined ? {} : { next })
+  });
 }
 
 /** How much of a result the audit log keeps; the caller still gets all of it. */

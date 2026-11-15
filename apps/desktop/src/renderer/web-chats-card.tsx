@@ -41,6 +41,8 @@ export function WebChatsCard({ onError, copyText, copied, mcp }: WebChatsCardPro
       setStatus(await action());
     } catch (cause: unknown) {
       onError(ipcErrorMessage(cause, fallback));
+      // A change can take effect and still report a problem, so show what is true now.
+      await api.getStatus().then(setStatus).catch(() => undefined);
     } finally {
       setBusy(false);
     }

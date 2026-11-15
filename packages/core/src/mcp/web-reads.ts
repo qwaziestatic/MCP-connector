@@ -10,7 +10,7 @@ import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { WorkflowService } from "../workflow/workflow.service.js";
-import { auditCopy, result, textOf } from "./tool-result.js";
+import { auditCopy, previewResult, textOf } from "./tool-result.js";
 
 export const RUN_APPROVED_READ_TOOL = "web_run_approved_read";
 
@@ -75,11 +75,11 @@ export function askBeforeWebReads(
         { tool: name, arguments: args },
         "web"
       );
-      return result({
-        requiresApproval: true,
+      return previewResult(
         preview,
-        next: `Nothing was read yet. Ask the user to approve this in MCP Connector. Poll workflow_preview_status; when it is APPROVED, call ${RUN_APPROVED_READ_TOOL} with this previewId. If it is REJECTED, stop.`
-      });
+        RUN_APPROVED_READ_TOOL,
+        `Nothing was read yet. Ask the user to approve this in MCP Connector. Poll workflow_preview_status; when it is APPROVED, call ${RUN_APPROVED_READ_TOOL} with this previewId. If it is REJECTED, stop.`
+      );
     });
   };
   server.registerTool = registerAsking as unknown as McpServer["registerTool"];

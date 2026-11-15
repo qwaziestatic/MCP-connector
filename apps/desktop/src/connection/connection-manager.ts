@@ -69,6 +69,9 @@ export class AgentConnectionManager {
   // The browser key the running server accepts. The server reads it on every
   // request, so a new key, or none, takes effect at once, without a restart.
   private browserKey: string | null = null;
+  // Set by "Turn off" and cleared only by a new key, so a key that could not
+  // be removed from the vault is never read back and accepted again.
+  private webChatsTurnedOff = false;
 
   public constructor(private readonly options: ConnectionManagerOptions) {}
 
@@ -106,7 +109,7 @@ export class AgentConnectionManager {
   }
 
   async getWebChatStatus(): Promise<WebChatStatus> {
-    this.browserKey = await this.options.secrets.getSecret("browser-key");
+    this.browserKey = await this.readBrowserKey();
     return { browserKey: this.browserKey, askBeforeReads: await this.askBeforeWebReads() };
   }
 
@@ -117,15 +120,34 @@ export class AgentConnectionManager {
   async newBrowserKey(): Promise<WebChatStatus> {
     const key = newToken();
     await this.options.secrets.saveSecret("browser-key", key);
+    // Only a new key turns web chats back on, and only once it is saved.
+    await this.options.settings.update({ webChatsTurnedOff: false });
+    this.webChatsTurnedOff = false;
     this.browserKey = key;
     return this.getWebChatStatus();
   }
 
-  /** Removes the browser key, so no web chat is accepted until a new one is created. */
+  /**
+   * Turns web chats off: no browser key is accepted until a new one is
+   * created. That holds even if the key cannot be removed from the vault,
+   * because the choice is remembered separately, in memory and in the settings.
+   */
   async turnOffWebChats(): Promise<WebChatStatus> {
-    // Refused from this moment, even if the vault cannot be written.
+    // Refused from this moment, whatever happens below.
     this.browserKey = null;
-    await this.options.secrets.removeSecret("browser-key");
+    this.webChatsTurnedOff = true;
+    const failures: unknown[] = [];
+    // Remembered first, so the key stays refused after a restart too.
+    await this.options.settings.update({ webChatsTurnedOff: true }).catch((error: unknown) => failures.push(error));
+    await this.options.secrets.removeSecret("browser-key").catch((error: unknown) => failures.push(error));
+    if (failures.length > 0) {
+      const reason = failures.map((failure) => failure instanceof Error ? failure.message : String(failure)).join(" ");
+      throw new Error(
+        `Web chats are turned off, but the old key could not be removed completely (${reason}). `
+        + "It is no longer accepted. Click Turn off again to retry, or create a new key to replace it.",
+        { cause: failures[0] }
+      );
+    }
     return this.getWebChatStatus();
   }
 
@@ -205,7 +227,7 @@ export class AgentConnectionManager {
     if (this.mcpServer !== null) return;
     const port = await this.mcpPort();
     try {
-      this.browserKey = await this.options.secrets.getSecret("browser-key");
+      this.browserKey = await this.readBrowserKey();
       this.mcpServer = await startMcpHttpServer(
         // Read on every call, so changing the setting reaches the running server.
         { ...this.options.getMcpDependencies(), askBeforeWebReads: () => this.askBeforeWebReads() },
@@ -251,6 +273,15 @@ export class AgentConnectionManager {
     const token = newToken();
     await this.options.secrets.saveSecret(name, token);
     return token;
+  }
+
+  /** The key in the vault, unless web chats were turned off since it was created. */
+  private async readBrowserKey(): Promise<string | null> {
+    if (this.webChatsTurnedOff || (await this.options.settings.read()).webChatsTurnedOff === true) {
+      this.webChatsTurnedOff = true;
+      return null;
+    }
+    return this.options.secrets.getSecret("browser-key");
   }
 
   /** On unless the user turned it off; a settings file that cannot be read keeps it on. */
