@@ -22,6 +22,8 @@ a real Windows or Linux machine, provider accounts, or release credentials.
       first two with Ubuntu's AppArmor user-namespace restriction in place.
 - [ ] `npm run package:vscode` produces the expected VSIX.
 - [ ] `npm run package:chrome` produces `release/mcp-connector-chrome-<version>.zip`.
+      Its `manifest.json` has the version's numbers in `version` and the whole
+      label in `version_name`, not `0.0.0`.
 - [ ] No secrets, certificates, databases, or generated artifacts are tracked.
 
 ## Signing and branding
@@ -141,8 +143,9 @@ Use a signed-in ChatGPT account in Chrome; the automated tests cannot.
 ## GitHub distribution
 
 - [ ] Review generated release notes.
-- [ ] Attach the signed installer, the AppImage, the .deb and the VSIX to the
-      GitHub Release.
+- [ ] Attach the signed installer, the AppImage, the .deb, the VSIX and the
+      Chrome extension zip to the GitHub Release. The release workflow
+      attaches all of them and the skill zip.
 - [ ] Run `npm run package:skill` and upload `release/mcp-connector-skill.zip`
       to the skill marketplace only after the release is public, because the
       skill's setup steps link to it.

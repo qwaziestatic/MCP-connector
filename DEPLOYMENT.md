@@ -215,7 +215,18 @@ chats to the same MCP server, with a key of its own. `npm run build:chrome`
 builds it into `apps/chrome-extension/dist`, the folder Chrome loads, and
 `npm run package:chrome` zips that folder as
 `release/mcp-connector-chrome-<version>.zip`. Its README has the install
-steps. Under **Web chats** in the app, **Create key** generates it. It is
+steps.
+
+The extension's version comes from `apps/chrome-extension/package.json`; the
+`0.0.0` in `static/manifest.json` is a placeholder that the build replaces.
+Chrome allows only one to four numbers in a manifest's `version`, so a
+release label does not fit there. The build puts the three numbers in
+`version` and the whole label in `version_name`: `0.3.0-beta.1` becomes
+`"version": "0.3.0"` and `"version_name": "0.3.0-beta.1"`, and the zip is
+named `mcp-connector-chrome-0.3.0-beta.1.zip`. Chrome therefore sees
+`0.3.0-beta.1`, `0.3.0-beta.2` and `0.3.0` as the same version, which does not
+matter for **Load unpacked** but would for the Chrome Web Store, where every
+upload needs a higher `version`. Under **Web chats** in the app, **Create key** generates it. It is
 stored encrypted in the credential vault, like the agents' token, and the
 extension is given the key and the server's port. **New key** replaces it and
 **Turn off** removes it; the old key is refused at once. Neither restarts the
@@ -346,8 +357,9 @@ and also builds the extension and the skill:
   and `apps/desktop/release/MCP-Connector-<version>-amd64.deb`, kept as the
   CI run's `linux-packages` artifact for testing on a real Linux PC
 - VS Code extension (release only): `apps/vscode-extension/mcp-connector-vscode-<version>.vsix`
-- Chrome extension: built and tested with the workspace; `npm run package:chrome`
-  zips it, and the release workflow does not attach it yet
+- Chrome extension (release only): `release/mcp-connector-chrome-<version>.zip`,
+  which the release workflow builds on Windows and attaches to the release.
+  Every pull request builds and tests the extension, but does not zip it
 - Workspace tests, type checks, and production builds pass.
 
 The artifacts are not yet production releases. The Windows installer is

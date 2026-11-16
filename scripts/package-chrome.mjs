@@ -13,7 +13,12 @@ const dist = join(root, "apps", "chrome-extension", "dist");
 if (!(await stat(join(dist, "manifest.json")).catch(() => null))?.isFile()) {
   throw new Error(`No manifest.json in ${dist}. Run "npm run build --workspace=apps/chrome-extension" first.`);
 }
-const { version } = JSON.parse(await readFile(join(dist, "manifest.json"), "utf8"));
+// The zip is named after the release's full version, such as 0.3.0-beta.1.
+// The manifest's "version" holds only its numbers, as Chrome requires.
+const { version_name: version } = JSON.parse(await readFile(join(dist, "manifest.json"), "utf8"));
+if (typeof version !== "string" || version.length === 0) {
+  throw new Error(`The manifest in ${dist} has no version_name. Build the extension again.`);
+}
 const output = join(root, "release", `mcp-connector-chrome-${version}.zip`);
 
 const entries = [];
