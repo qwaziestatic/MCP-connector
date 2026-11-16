@@ -57,7 +57,7 @@ not offered that tool: their read-only tools run at once.
 | --- | --- |
 | "No workspace is selected" | Choose a folder in MCP Connector. |
 | "outside the user-selected workspace" | Only the selected folder can be read. |
-| "MCP Connector does not read" | That file usually holds secrets (`.env`, a private key, anything in `.git`), so it is never read. Do not look for another way to read it. |
+| "MCP Connector does not read" | That file usually holds secrets (`.env`, `.npmrc`, a private key, Terraform state, anything in `.git`, `.ssh` or `.aws`), or on Windows its path has a colon. It is never read. Do not look for another way to read it. |
 | "is too large to read" or "is not a text file" | That file cannot be read with these tools. |
 | "is not connected" | Click **Connect** next to the service in MCP Connector. |
 | "needs" and a setting's name | Set it in MCP Connector, under the service. |

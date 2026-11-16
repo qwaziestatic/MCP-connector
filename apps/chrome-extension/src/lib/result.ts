@@ -78,15 +78,20 @@ export function trimResult(text: string, limit = RESULT_LIMIT): TrimmedResult {
 
 /**
  * The message for the chat box: the result in a fenced block labelled
- * mcp-result, with a note after it when the result was trimmed.
+ * mcp-result. When the result was trimmed, a note after it says the text is
+ * incomplete and how to ask for a part that fits.
  */
 export function formatResult(tool: string, result: string, limit = RESULT_LIMIT): string {
   const { text, trimmed, originalLength } = trimResult(result, limit);
   // A fence longer than any run of backticks in the result, so the result cannot end the block early.
   const longestRun = Math.max(0, ...[...text.matchAll(/`+/gu)].map((match) => match[0].length));
   const fence = "`".repeat(Math.max(3, longestRun + 1));
+  // The result may describe itself as complete, for example with line numbers
+  // the chat never received, so the note has to correct that.
   const note = trimmed
-    ? `\n(The result was trimmed: this is the first ${text.length.toLocaleString("en-US")} of ${originalLength.toLocaleString("en-US")} characters.)`
+    ? `\n(This result is incomplete. It was cut off after the first ${text.length.toLocaleString("en-US")} of ${originalLength.toLocaleString("en-US")} characters, `
+      + "so the text above stops early, whatever line numbers or counts it gives. Do not guess the missing part. "
+      + "Ask again for less: for a file, fewer lines with startLine and maxLines.)"
     : "";
   return `Result of ${tool}:\n${fence}${RESULT_LANGUAGE}\n${text}\n${fence}${note}`;
 }

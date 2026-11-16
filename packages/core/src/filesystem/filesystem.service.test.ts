@@ -7,6 +7,7 @@ import {
   FilesystemService,
   isPathWithinRoot,
   MAX_READ_FILE_BYTES,
+  namesFileStream,
   secretFileReason
 } from "./filesystem.service.js";
 
@@ -259,13 +260,28 @@ describe("reading a file", () => {
       ["certs/identity.p12", "Files ending in .p12"],
       ["certs/identity.pfx", "Files ending in .pfx"],
       ["keys/putty.ppk", "Files ending in .ppk"],
+      ["android/release.jks", "Files ending in .jks"],
+      ["android/debug.keystore", "Files ending in .keystore"],
       ["id_rsa", "SSH private key"],
-      [".ssh/id_ed25519", "SSH private key"],
-      [".ssh/id_ecdsa", "SSH private key"],
-      [".ssh/id_dsa", "SSH private key"],
+      ["keys/id_ed25519", "SSH private key"],
+      ["keys/id_ecdsa", "SSH private key"],
+      ["keys/id_dsa", "SSH private key"],
+      [".npmrc", ".npmrc files usually hold npm sign-in tokens"],
+      ["packages/web/.npmrc", ".npmrc files usually hold npm sign-in tokens"],
+      [".netrc", ".netrc files usually hold passwords for servers"],
+      [".pypirc", ".pypirc files usually hold passwords for Python package indexes"],
+      ["infra/terraform.tfstate", "Terraform state and variable files"],
+      ["infra/terraform.tfstate.backup", "Terraform state and variable files"],
+      ["infra/prod.tfstate.1700000000.backup", "Terraform state and variable files"],
+      ["infra/production.tfvars", "Terraform state and variable files"],
       [".git/config", "inside a .git folder"],
       [".git/HEAD", "inside a .git folder"],
-      ["vendor/lib/.git/config", "inside a .git folder"]
+      ["vendor/lib/.git/config", "inside a .git folder"],
+      [".ssh/config", "inside a .ssh folder"],
+      [".ssh/known_hosts", "inside a .ssh folder"],
+      [".ssh/id_ed25519.pub", "inside a .ssh folder"],
+      [".aws/credentials", "inside a .aws folder"],
+      ["home/.aws/config", "inside a .aws folder"]
     ];
 
     for (const [path, reason] of refused) {
@@ -279,12 +295,55 @@ describe("reading a file", () => {
     }
 
     it("still reads the files next to them that hold no secrets", async () => {
-      const allowed = [".env.example", "id_rsa.pub", ".gitignore", ".github/workflows/ci.yml", "docs/keys.md", "src/env.ts"];
+      const allowed = [
+        ".env.example", ".env.sample", ".env.template", "id_rsa.pub", ".gitignore", ".github/workflows/ci.yml",
+        "docs/keys.md", "src/env.ts", "infra/main.tf", "docs/aws/setup.md", "src/ssh/client.ts", "npmrc.md"
+      ];
       const { filesystem } = await setUp(Object.fromEntries(allowed.map((path) => [path, "public"])));
       for (const path of allowed) {
         expect((await filesystem.readTextFile(path)).text, path).toBe("public");
         expect(secretFileReason(path), path).toBeNull();
       }
+    });
+  });
+
+  describe("Windows file streams", () => {
+    const streams = [".env::$DATA", "server.key::$DATA", "server.key:stream", "notes.txt:hidden", "notes.txt::$DATA", ".git::$INDEX_ALLOCATION/config"];
+
+    it("treats a colon in a path as a stream on Windows only", () => {
+      for (const path of streams) {
+        expect(namesFileStream(path, "win32"), path).toBe(true);
+        // On Linux and macOS a colon is an ordinary character in a name.
+        expect(namesFileStream(path, "linux"), path).toBe(false);
+        expect(namesFileStream(path, "darwin"), path).toBe(false);
+      }
+      expect(namesFileStream("src/index.ts", "win32")).toBe(false);
+    });
+
+    it("does not let a secret file's name hide behind dots or spaces that Windows ignores", () => {
+      for (const path of [".env.", ".env. .", "server.key.", ".git./config", ".ENV"]) {
+        expect(secretFileReason(path), path).not.toBeNull();
+      }
+    });
+
+    it.runIf(process.platform === "win32")("refuses every path that names a stream, for reading and for the preview", async () => {
+      const { workspace, filesystem } = await setUp({ ".env": "API_KEY=1", "server.key": "KEY", "notes.txt": "plain", ".git/config": "token" });
+      // A named stream holds data that no listing of the folder shows.
+      await writeFile(join(workspace, "notes.txt:hidden"), "hidden text");
+
+      for (const path of streams) {
+        await expect(filesystem.readTextFile(path), path).rejects.toThrow("a colon in a path names a hidden stream");
+        expect(() => filesystem.describeRead(path), path).toThrow("a colon in a path names a hidden stream");
+      }
+      // The drive letter's own colon is not a stream.
+      expect((await filesystem.readTextFile(join(workspace, "notes.txt"))).text).toBe("plain");
+    });
+
+    it.runIf(process.platform !== "win32")("reads a file whose name has a colon where that is an ordinary name", async () => {
+      const { filesystem } = await setUp({ "notes:draft.txt": "plain", ".env:backup": "API_KEY=1" });
+      expect((await filesystem.readTextFile("notes:draft.txt")).text).toBe("plain");
+      // Not a stream here, so it is a different file from .env, with its own name.
+      expect((await filesystem.readTextFile(".env:backup")).text).toBe("API_KEY=1");
     });
   });
 
