@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ConnectedConnector } from "../connectors/connector-definition.js";
-import { DEFAULT_READ_LINES, FilesystemService, MAX_READ_FILE_BYTES } from "../filesystem/filesystem.service.js";
+import { DEFAULT_READ_LINES, FilesystemService, MAX_READ_FILE_BYTES, type FileText } from "../filesystem/filesystem.service.js";
 import type { ExternalToolSource } from "../gateway/external-servers.js";
 import { registerExternalTools } from "../gateway/gateway-tools.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
@@ -54,6 +54,17 @@ export function createMcpServer(
             return {
               summary: lines === undefined ? `Read the file ${file}` : `Read the file ${file}, lines ${lines}`,
               details: lines === undefined ? { file } : { file, lines }
+            };
+          }
+        },
+        audit: {
+          // The log says which file and lines were read and how much text, and keeps none of it.
+          [READ_FILE_TOOL]: (full) => {
+            const read = (full.structuredContent ?? {}) as Partial<FileText>;
+            return {
+              file: read.path ?? null,
+              lines: `${read.startLine ?? 0} to ${read.endLine ?? 0} of ${read.totalLines ?? 0}`,
+              characters: read.text?.length ?? 0
             };
           }
         }

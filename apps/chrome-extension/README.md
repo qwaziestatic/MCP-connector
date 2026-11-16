@@ -65,8 +65,10 @@ After you rebuild, click the reload arrow on the extension's card in
      extension runs it, once, and shows the result. If you reject it, or it
      fails, the panel says so. Keep the panel open while it waits.
 6. Click **Put result in chat box**. The result appears in the chat box as a
-   block labelled `mcp-result`, trimmed to 20,000 characters with a note when
-   it was longer. Read it and press Send.
+   block labelled `mcp-result`. A result longer than 20,000 characters is cut
+   off there, and a note after the block tells the chat that the text is
+   incomplete and to ask again for less, for a file with `startLine` and
+   `maxLines`. Read it and press Send.
 
 If the page cannot be read, for example after ChatGPT changes its layout, the
 panel says so and still works by hand: copy the `mcp-call` block from the

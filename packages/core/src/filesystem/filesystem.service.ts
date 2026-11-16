@@ -40,29 +40,66 @@ export const MAX_READ_FILE_BYTES = 1_000_000;
 export const DEFAULT_READ_LINES = 2_000;
 
 const SSH_PRIVATE_KEY = /^id_(rsa|dsa|ecdsa|ed25519|ecdsa_sk|ed25519_sk)$/u;
+/** Folders whose contents are never read, and what they hold. */
+const SECRET_FOLDERS: Readonly<Record<string, string>> = {
+  ".git": "which can hold sign-in details for the repository's remotes",
+  ".ssh": "which holds SSH keys and the servers they open",
+  ".aws": "which holds AWS access keys"
+};
+/** Files that are never read, by name, and what they hold. */
+const SECRET_NAMES: Readonly<Record<string, string>> = {
+  ".npmrc": "npm sign-in tokens",
+  ".netrc": "passwords for servers",
+  ".pypirc": "passwords for Python package indexes"
+};
+/** The .env files that hold examples, not secrets. */
+const EXAMPLE_ENV_FILES: ReadonlySet<string> = new Set([".env.example", ".env.sample", ".env.template"]);
 
 /**
  * Why a file is not read even though it is inside the workspace, or null. It
  * covers the files that usually hold secrets: an agent or a web chat has no
- * need for them, and what a tool reads can end up in a chat.
+ * need for them, and what a tool reads can end up in a chat. The list is a
+ * safety net for common cases, not a complete list of secret files.
  */
 export function secretFileReason(relativePath: string): string | null {
-  // Compared without case: Windows and macOS find ".ENV" when asked for ".env".
-  const parts = relativePath.split(/[\\/]+/u).filter((part) => part.length > 0).map((part) => part.toLowerCase());
+  const parts = relativePath.split(/[\\/]+/u)
+    // Compared without case, and without the dots and spaces Windows ignores
+    // at the end of a name: ".ENV" and ".env." both open ".env" there.
+    .map((part) => part.toLowerCase().replace(/[. ]+$/u, ""))
+    .filter((part) => part.length > 0);
   const name = parts.at(-1) ?? "";
-  if (parts.includes(".git")) {
-    return "It is inside a .git folder, which can hold sign-in details for the repository's remotes.";
+  const folder = parts.find((part) => part in SECRET_FOLDERS);
+  if (folder !== undefined) {
+    return `It is inside a ${folder} folder, ${SECRET_FOLDERS[folder]}.`;
   }
-  if (name === ".env" || (name.startsWith(".env.") && name !== ".env.example")) {
-    return "It is an environment file (.env), which usually holds passwords and API keys. Only .env.example can be read.";
+  if (name === ".env" || (name.startsWith(".env.") && !EXAMPLE_ENV_FILES.has(name))) {
+    return "It is an environment file (.env), which usually holds passwords and API keys. "
+      + "Only .env.example, .env.sample and .env.template can be read.";
   }
-  if (/\.(pem|key|p12|pfx|ppk)$/u.test(name)) {
+  if (name in SECRET_NAMES) {
+    return `${name} files usually hold ${SECRET_NAMES[name]}.`;
+  }
+  if (/\.(pem|key|p12|pfx|ppk|jks|keystore)$/u.test(name)) {
     return `Files ending in ${name.slice(name.lastIndexOf("."))} usually hold private keys or certificates.`;
+  }
+  if (/\.tfstate($|\.)/u.test(name) || name.endsWith(".tfvars")) {
+    return "Terraform state and variable files usually hold passwords and keys for the things they describe.";
   }
   if (SSH_PRIVATE_KEY.test(name)) {
     return "It looks like an SSH private key.";
   }
   return null;
+}
+
+/**
+ * Whether a path inside the workspace names a stream of a file, as a colon
+ * does on Windows ("notes.txt:hidden", ".env::$DATA"). A stream is another
+ * way to the same file, or to data hidden beside it, so the name checks
+ * cannot be trusted for such a path. Elsewhere a colon is an ordinary
+ * character in a file's name.
+ */
+export function namesFileStream(relativePath: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32" && relativePath.includes(":");
 }
 
 const MAX_ENTRIES = 2_000;
@@ -235,6 +272,9 @@ export class FilesystemService {
       throw new Error("That file is outside the user-selected workspace.");
     }
     const relativePath = relative(root, target).split(/[\\/]/u).join("/");
+    if (namesFileStream(relativePath)) {
+      throw new Error(`MCP Connector does not read ${relativePath}. On Windows a colon in a path names a hidden stream of a file.`);
+    }
     const secret = secretFileReason(relativePath);
     if (secret !== null) throw new Error(`MCP Connector does not read ${relativePath}. ${secret}`);
     return { root, target, relativePath };

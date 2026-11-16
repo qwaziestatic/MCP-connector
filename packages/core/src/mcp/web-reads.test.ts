@@ -301,6 +301,26 @@ describe("reads from web chats", () => {
     expect(read).toEqual({ path: "README.md", totalLines: 1, startLine: 1, endLine: 1, hasMore: false, text: "# Private notes" });
   });
 
+  it("records which file and lines a web chat read, and how much, but not the text", async () => {
+    const { connect, workflow, audit, workspace } = await setUp();
+    await writeFile(join(workspace, "notes.md"), "one\nthe launch code is 4471\nthree\n");
+    const web = await connect("web");
+    const preview = previewOf(await web.call("filesystem_read_file", { path: "notes.md", startLine: 2, maxLines: 1 }));
+    await workflow.approve(preview.id);
+    expect(text(await web.call("web_run_approved_read", { previewId: preview.id }))).toContain("launch code");
+
+    const records = await audit.list();
+    const executed = JSON.parse(records.find((record) => record.status === "EXECUTED")!.previewJson) as { result: unknown };
+    expect(executed.result).toEqual({ file: "notes.md", lines: "2 to 2 of 3", characters: 23 });
+    expect(JSON.stringify(records)).not.toContain("launch code");
+
+    // Other tools' results are still kept as a shortened copy.
+    const listing = previewOf(await web.call("filesystem_inspect_workspace"));
+    await workflow.approve(listing.id);
+    await web.call("web_run_approved_read", { previewId: listing.id });
+    expect(JSON.stringify(await audit.list())).toContain("notes.md");
+  });
+
   it("refuses a file outside the workspace or a secret file before asking the user", async () => {
     const { connect, workflow, workspace } = await setUp();
     await writeFile(join(workspace, ".env"), "API_KEY=secret");

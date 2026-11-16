@@ -35,11 +35,28 @@ describe("formatResult", () => {
     );
   });
 
-  it("adds a note when the result was trimmed", () => {
-    const message = formatResult("files__read_file", "x".repeat(25_000));
-    assert.equal(message.endsWith("\n```\n(The result was trimmed: this is the first 20,000 of 25,000 characters.)"), true);
-    assert.equal(message.length < 20_200, true);
-    assert.equal(formatResult("files__read_file", "x".repeat(20_000)).includes("trimmed"), false);
+  it("says a trimmed result is incomplete and how to ask for a part that fits", () => {
+    const message = formatResult("filesystem_read_file", "x".repeat(25_000));
+    const note = message.slice(message.lastIndexOf("\n```\n") + 5);
+    assert.equal(
+      note,
+      "(This result is incomplete. It was cut off after the first 20,000 of 25,000 characters, "
+        + "so the text above stops early, whatever line numbers or counts it gives. Do not guess the missing part. "
+        + "Ask again for less: for a file, fewer lines with startLine and maxLines.)"
+    );
+    assert.equal(message.length < 20_500, true);
+    assert.equal(formatResult("filesystem_read_file", "x".repeat(20_000)).includes("incomplete"), false);
+  });
+
+  it("keeps what a file read says about itself ahead of the cut, and corrects it in the note", () => {
+    // What filesystem_read_file answers for 2,000 long lines: the counts come first, then the text.
+    const lines = Array.from({ length: 2_000 }, (_unused, index) => `line ${index + 1} ${"x".repeat(60)}`);
+    const answer = JSON.stringify({ path: "log.txt", totalLines: 9_000, startLine: 1, endLine: 2_000, hasMore: true, text: lines.join("\n") }, null, 2);
+    const message = formatResult("filesystem_read_file", answer);
+
+    assert.match(message, /"endLine": 2000/u);
+    assert.equal(message.includes("line 2000 "), false);
+    assert.match(message, /This result is incomplete\..*whatever line numbers or counts it gives.*startLine and maxLines/u);
   });
 
   it("uses a longer fence when the result has code blocks of its own", () => {

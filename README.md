@@ -229,9 +229,21 @@ Mutating operations never execute silently. They follow this sequence:
 
 Filesystem access is limited to the workspace root explicitly selected by the
 user. `filesystem_read_file` reads one text file inside it, up to 1,000,000
-bytes, and refuses files that usually hold secrets even there: `.env` and
-`.env.*` (except `.env.example`), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.ppk`,
-SSH private keys such as `id_rsa`, and anything inside a `.git` folder. MCP HTTP and VS Code listeners bind to loopback only and require
+bytes, and refuses files that usually hold secrets even there:
+
+- `.env` and `.env.*`, except `.env.example`, `.env.sample` and
+  `.env.template`;
+- `.npmrc`, `.netrc` and `.pypirc`;
+- `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.ppk`, `*.jks` and `*.keystore`;
+- `*.tfstate`, `*.tfstate.*` and `*.tfvars`;
+- SSH private keys such as `id_rsa`; and
+- anything inside a `.git`, `.ssh` or `.aws` folder.
+
+On Windows it also refuses any path with a colon after the drive letter,
+which would name a hidden stream of a file. This list is a safety net for
+common cases, not a complete list of secret files: a secret in a file with
+another name is read like any other text. Select a workspace that holds
+nothing you would not show an agent. MCP HTTP and VS Code listeners bind to loopback only and require
 bearer authentication.
 
 Web chats use the browser extension's own key, created under **Web chats** in
@@ -254,8 +266,10 @@ log stay on your computer.
 The audit log keeps each request as you saw it, with its arguments, and what
 came of it. For a call to another MCP server and for a web chat's read, that
 is a shortened copy of the tool's result, up to 2,000 characters; the agent
-or web chat that asked gets the whole result. The log is in the app's
-database, on this computer only.
+or web chat that asked gets the whole result. A file read with
+`filesystem_read_file` is the exception: the log records the file's path,
+the lines read and the number of characters returned, and none of the text.
+The log is in the app's database, on this computer only.
 
 ## License
 

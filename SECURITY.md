@@ -20,8 +20,15 @@ published with credit to you, unless you prefer otherwise.
   you add, waits for your approval in the app and runs once, exactly as
   approved. The audit log records each step. It keeps each request with its
   arguments and, for calls to other MCP servers and web chats' reads, a
-  shortened copy of the tool's result (up to 2,000 characters). It stays in
+  shortened copy of the tool's result (up to 2,000 characters). For a file
+  read with `filesystem_read_file` it keeps the file's path, the lines read
+  and the number of characters returned, and none of the text. It stays in
   the app's database on this computer and is sent nowhere.
+- `filesystem_read_file` refuses common secret files even inside the folder
+  you select, such as `.env` files, private keys and anything in `.git`,
+  `.ssh` or `.aws`. The list in the README is a safety net, not a complete
+  list. A way to read one of the listed files is in scope; a secret in a
+  file the list does not name is not.
 - Sign-in tokens, the app's own tokens and the keys of other MCP servers are
   encrypted by your system: Windows' data protection (DPAPI), or GNOME Keyring
   or KWallet on Linux. They are never stored in plain files, and on Linux

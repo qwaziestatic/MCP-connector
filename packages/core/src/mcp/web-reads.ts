@@ -53,6 +53,11 @@ export function askBeforeWebReads(
      * so it can refuse a read the tool would refuse anyway by throwing.
      */
     readonly describe?: Readonly<Record<string, (args: Arguments) => { readonly summary: string; readonly details: Arguments }>>;
+    /**
+     * For tools whose result should not be copied into the audit log: what
+     * the log records about the result instead of its shortened text.
+     */
+    readonly audit?: Readonly<Record<string, (full: CallToolResult) => Arguments>>;
   }
 ): { registerRunTool(): void } {
   const { workflow, isOn } = options;
@@ -121,8 +126,9 @@ export function askBeforeWebReads(
           await workflow.executeApproved(previewId, async () => {
             full = await read!(call.arguments, received[1]);
             if (full.isError === true) throw new Error(`"${call.tool}" reported an error: ${textOf(full).slice(0, 500)}`);
-            // The audit log keeps a shortened copy; the web chat gets the whole result.
-            return auditCopy(full);
+            // The web chat gets the whole result. The audit log keeps a shortened
+            // copy, or for some tools only what was read, not the text.
+            return options.audit?.[call.tool]?.(full) ?? auditCopy(full);
           });
           return full as CallToolResult;
         }
