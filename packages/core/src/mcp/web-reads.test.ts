@@ -321,6 +321,56 @@ describe("reads from web chats", () => {
     expect(JSON.stringify(await audit.list())).toContain("notes.md");
   });
 
+  it("gives a web chat a long file in parts that fit a chat box, and an agent the usual 2,000 lines", async () => {
+    const { connect, workflow, audit, workspace } = await setUp();
+    const lines = Array.from({ length: 3_000 }, (_unused, index) => `line ${index + 1} ${"x".repeat(60)}`);
+    await writeFile(join(workspace, "log.txt"), lines.join("\n"));
+    const web = await connect("web");
+    const agent = await connect("mcp");
+    type Read = { totalLines: number; startLine: number; endLine: number; hasMore: boolean; text: string };
+    const readAsWeb = async (args: Record<string, unknown>): Promise<Read> => {
+      const preview = previewOf(await web.call("filesystem_read_file", { path: "log.txt", ...args }));
+      await workflow.approve(preview.id);
+      return JSON.parse(text(await web.call("web_run_approved_read", { previewId: preview.id }))) as Read;
+    };
+
+    // The web chat asked for the whole file. It gets what fits, ending on a whole line, and is told where it stopped.
+    const first = await readAsWeb({});
+    expect(first.text.length).toBeLessThanOrEqual(16_000);
+    expect(first.text.length).toBeGreaterThan(15_000);
+    expect(first).toMatchObject({ totalLines: 3_000, startLine: 1, hasMore: true });
+    expect(first.text).toBe(lines.slice(0, first.endLine).join("\n"));
+    expect(first.endLine).toBeLessThan(2_000);
+
+    // Asking for more lines than fit changes nothing, and reading on continues without a gap.
+    const second = await readAsWeb({ startLine: first.endLine + 1, maxLines: 5_000 });
+    expect(second.startLine).toBe(first.endLine + 1);
+    expect(second.text).toBe(lines.slice(first.endLine, second.endLine).join("\n"));
+    expect(second.text.length).toBeLessThanOrEqual(16_000);
+
+    // The audit log records the lines that were really returned.
+    const executed = (await audit.list()).filter((record) => record.status === "EXECUTED")
+      .map((record) => (JSON.parse(record.previewJson) as { result: { lines: string; characters: number } }).result);
+    expect(executed.map((result) => result.lines).sort()).toEqual(
+      [`1 to ${first.endLine} of 3000`, `${second.startLine} to ${second.endLine} of 3000`].sort()
+    );
+
+    // With the agents' token nothing changes: 2,000 lines, far more than the web budget.
+    const whole = JSON.parse(text(await agent.call("filesystem_read_file", { path: "log.txt" }))) as Read;
+    expect(whole).toMatchObject({ startLine: 1, endLine: 2_000, hasMore: true });
+    expect(whole.text.length).toBeGreaterThan(100_000);
+  });
+
+  it("limits a web chat's file reads the same way when it is not asked to approve them", async () => {
+    const { connect, workspace } = await setUp({ askBeforeWebReads: () => false });
+    await writeFile(join(workspace, "log.txt"), Array.from({ length: 3_000 }, (_unused, index) => `line ${index + 1} ${"x".repeat(60)}`).join("\n"));
+    const read = JSON.parse(text(await (await connect("web")).call("filesystem_read_file", { path: "log.txt" }))) as { text: string; endLine: number; hasMore: boolean };
+
+    expect(read.text.length).toBeLessThanOrEqual(16_000);
+    expect(read.hasMore).toBe(true);
+    expect(read.text.endsWith(`line ${read.endLine} ${"x".repeat(60)}`)).toBe(true);
+  });
+
   it("refuses a file outside the workspace or a secret file before asking the user", async () => {
     const { connect, workflow, workspace } = await setUp();
     await writeFile(join(workspace, ".env"), "API_KEY=secret");

@@ -65,7 +65,9 @@ After you rebuild, click the reload arrow on the extension's card in
      extension runs it, once, and shows the result. If you reject it, or it
      fails, the panel says so. Keep the panel open while it waits.
 6. Click **Put result in chat box**. The result appears in the chat box as a
-   block labelled `mcp-result`. A result longer than 20,000 characters is cut
+   block labelled `mcp-result`. MCP Connector gives a web chat a long file in
+   parts that fit, each ending on a whole line and saying whether more
+   remains. Should any result still be longer than 20,000 characters, it is cut
    off there, and a note after the block tells the chat that the text is
    incomplete and to ask again for less, for a file with `startLine` and
    `maxLines`. Read it and press Send.

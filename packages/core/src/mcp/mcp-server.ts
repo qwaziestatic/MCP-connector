@@ -1,7 +1,13 @@
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ConnectedConnector } from "../connectors/connector-definition.js";
-import { DEFAULT_READ_LINES, FilesystemService, MAX_READ_FILE_BYTES, type FileText } from "../filesystem/filesystem.service.js";
+import {
+  DEFAULT_READ_LINES,
+  FilesystemService,
+  MAX_READ_FILE_BYTES,
+  WEB_READ_CHARACTERS,
+  type FileText
+} from "../filesystem/filesystem.service.js";
 import type { ExternalToolSource } from "../gateway/external-servers.js";
 import { registerExternalTools } from "../gateway/gateway-tools.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
@@ -129,6 +135,7 @@ export function createMcpServer(
       description: "Read one text file in the user's selected workspace. path is relative to the workspace. "
         + `Returns up to ${DEFAULT_READ_LINES.toLocaleString("en-US")} lines; for a longer file, pass startLine and maxLines `
         + "and read on from endLine + 1 while hasMore is true. The answer gives the file's totalLines. "
+        + "A call can return fewer lines than it was asked for, so always go by endLine and hasMore. "
         + `Refuses files outside the workspace, files over ${MAX_READ_FILE_BYTES.toLocaleString("en-US")} bytes, files that are not text, `
         + "and files that usually hold secrets (.env, private keys, anything in .git).",
       inputSchema: {
@@ -142,7 +149,12 @@ export function createMcpServer(
         openWorldHint: false
       }
     },
-    async ({ path, startLine, maxLines }) => result(await dependencies.filesystem.readTextFile(path, { startLine, maxLines }))
+    async ({ path, startLine, maxLines }) => result(await dependencies.filesystem.readTextFile(path, {
+      startLine,
+      maxLines,
+      // A web chat gets as much as a chat box takes, ending on a whole line. An agent's read is not limited this way.
+      ...(source === "web" ? { maxCharacters: WEB_READ_CHARACTERS } : {})
+    }))
   );
 
   server.registerTool(

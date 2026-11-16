@@ -25,6 +25,8 @@ export interface FileText {
   /** Whether lines remain after endLine. */
   readonly hasMore: boolean;
   readonly text: string;
+  /** Present only when a line was too long to return whole; it says what is missing. */
+  readonly note?: string;
 }
 
 export interface ReadRange {
@@ -32,12 +34,23 @@ export interface ReadRange {
   readonly startLine?: number | undefined;
   /** How many lines to return at most. */
   readonly maxLines?: number | undefined;
+  /**
+   * How many characters of text to return at most. The read stops at the end
+   * of the last whole line that fits, and endLine and hasMore say where.
+   */
+  readonly maxCharacters?: number | undefined;
 }
 
 /** Larger files are refused, not cut: read_file is for text a person would open. */
 export const MAX_READ_FILE_BYTES = 1_000_000;
 /** How many lines one call returns unless it asks for fewer. */
 export const DEFAULT_READ_LINES = 2_000;
+/**
+ * How much text one read returns to a web chat. A chat box takes far less
+ * than an agent does, and a read that stops here says so itself, with the
+ * true endLine and hasMore, so the chat reads on instead of being cut off.
+ */
+export const WEB_READ_CHARACTERS = 16_000;
 
 const SSH_PRIVATE_KEY = /^id_(rsa|dsa|ecdsa|ed25519|ecdsa_sk|ed25519_sk)$/u;
 /** Folders whose contents are never read, and what they hold. */
@@ -348,7 +361,31 @@ export class FilesystemService {
     if (totalLines > 0 && startLine > totalLines) {
       throw new Error(`${relativePath} has ${totalLines} ${totalLines === 1 ? "line" : "lines"}, so there is no line ${startLine}.`);
     }
-    const selected = lines.slice(startLine - 1, startLine - 1 + (range.maxLines ?? DEFAULT_READ_LINES));
+    let selected = lines.slice(startLine - 1, startLine - 1 + (range.maxLines ?? DEFAULT_READ_LINES));
+    let note: string | undefined;
+    const budget = range.maxCharacters;
+    if (budget !== undefined && selected.length > 0) {
+      // Keep the whole lines that fit, counting the line breaks between them.
+      let fitting = 0;
+      let length = 0;
+      for (const line of selected) {
+        const next = length + line.length + (fitting === 0 ? 0 : 1);
+        if (next > budget) break;
+        length = next;
+        fitting += 1;
+      }
+      if (fitting > 0) {
+        selected = selected.slice(0, fitting);
+      } else {
+        // The first line alone is too long. Its start is returned, never half a character, and the answer says so.
+        const line = selected[0]!;
+        const last = line.charCodeAt(budget - 1);
+        const cut = line.slice(0, last >= 0xd800 && last <= 0xdbff ? budget - 1 : budget);
+        selected = [cut];
+        note = `Line ${startLine} is ${line.length.toLocaleString("en-US")} characters long. Only its first `
+          + `${cut.length.toLocaleString("en-US")} are returned, and the rest of that line cannot be read with this tool.`;
+      }
+    }
     const endLine = selected.length === 0 ? 0 : startLine + selected.length - 1;
     return {
       path: relativePath,
@@ -356,7 +393,8 @@ export class FilesystemService {
       startLine: selected.length === 0 ? 0 : startLine,
       endLine,
       hasMore: endLine < totalLines,
-      text: selected.join("\n")
+      text: selected.join("\n"),
+      ...(note === undefined ? {} : { note })
     };
   }
 
