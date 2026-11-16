@@ -246,6 +246,13 @@ two differences:
   that the approval can be followed. With the setting off, read-only tools
   answer web chats at once; changes still wait for approval.
 
+For a web chat, `filesystem_read_file` returns at most 16,000 characters of
+text per call, because a chat box takes far less than an agent does. It
+stops at the end of the last whole line that fits and reports the true
+`endLine` and `hasMore`, so the chat reads on from `endLine + 1`. The number
+is the server's own (`WEB_READ_CHARACTERS`). A single line longer than that
+is returned cut, with a note saying so.
+
 For `filesystem_read_file`, the preview names the file by its path inside the
 workspace, and the lines if a range was asked for, so you approve exactly
 that file. A path outside the workspace, or a file that usually holds

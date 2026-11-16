@@ -45,7 +45,9 @@ own inputs. Read-only tools run at once; the others return a preview first.
 ## Web chats
 
 A web chat that reaches MCP Connector through its browser extension gets the
-tools above, and its requests are marked as a web chat's in the app. While
+tools above, and its requests are marked as a web chat's in the app. For a
+web chat, `filesystem_read_file` returns at most about 16,000 characters per
+call, ending on a whole line; `endLine` and `hasMore` say where it stopped. While
 the user keeps **Ask before web chats read anything** on, its read-only tools
 return a preview too, with no data, and `web_run_approved_read` (input:
 `previewId`) runs the approved read once and returns the result. Agents are

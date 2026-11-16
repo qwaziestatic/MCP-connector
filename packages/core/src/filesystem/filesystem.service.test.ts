@@ -8,6 +8,7 @@ import {
   isPathWithinRoot,
   MAX_READ_FILE_BYTES,
   namesFileStream,
+  WEB_READ_CHARACTERS,
   secretFileReason
 } from "./filesystem.service.js";
 
@@ -181,6 +182,56 @@ describe("reading a file", () => {
     expect(last).toMatchObject({ startLine: 4_499, endLine: 4_500, hasMore: false, text: "line 4499\nline 4500" });
 
     await expect(filesystem.readTextFile("log.txt", { startLine: 4_501 })).rejects.toThrow("has 4500 lines, so there is no line 4501");
+  });
+
+  it("stops at a character budget on a whole line, and says truly where it stopped", async () => {
+    const lines = Array.from({ length: 900 }, (_unused, index) => `line ${index + 1} ${"x".repeat(index % 90)}`);
+    const { filesystem } = await setUp({ "long.txt": `${lines.join("\n")}\n` });
+
+    const first = await filesystem.readTextFile("long.txt", { maxCharacters: WEB_READ_CHARACTERS });
+    expect(first.text.length).toBeLessThanOrEqual(WEB_READ_CHARACTERS);
+    expect(first).toMatchObject({ totalLines: 900, startLine: 1, hasMore: true });
+    expect(first.endLine).toBeLessThan(900);
+    // Exactly the lines it says, whole, and the next line would not have fitted.
+    expect(first.text).toBe(lines.slice(0, first.endLine).join("\n"));
+    expect(first.text.length + 1 + lines[first.endLine]!.length).toBeGreaterThan(WEB_READ_CHARACTERS);
+    expect(first.note).toBeUndefined();
+
+    // Reading on from endLine + 1 gives the whole file, with nothing lost or repeated.
+    const parts = [first];
+    while (parts.at(-1)!.hasMore) {
+      parts.push(await filesystem.readTextFile("long.txt", { startLine: parts.at(-1)!.endLine + 1, maxCharacters: WEB_READ_CHARACTERS }));
+    }
+    expect(parts.length).toBeGreaterThan(2);
+    expect(parts.map((part) => part.text).join("\n")).toBe(lines.join("\n"));
+    expect(parts.at(-1)).toMatchObject({ endLine: 900, hasMore: false });
+  });
+
+  it("applies the smaller of the line limit and the character budget, and neither to a short file", async () => {
+    const lines = Array.from({ length: 50 }, (_unused, index) => `line ${index + 1}`);
+    const { filesystem } = await setUp({ "short.txt": lines.join("\n") });
+
+    expect(await filesystem.readTextFile("short.txt", { maxCharacters: WEB_READ_CHARACTERS }))
+      .toEqual(await filesystem.readTextFile("short.txt"));
+    expect(await filesystem.readTextFile("short.txt", { startLine: 10, maxLines: 3, maxCharacters: WEB_READ_CHARACTERS }))
+      .toMatchObject({ startLine: 10, endLine: 12, hasMore: true, text: "line 10\nline 11\nline 12" });
+    expect(await filesystem.readTextFile("short.txt", { maxLines: 40, maxCharacters: 20 }))
+      .toMatchObject({ startLine: 1, endLine: 3, hasMore: true, text: "line 1\nline 2\nline 3" });
+  });
+
+  it("returns the start of a line too long for the budget, and says the rest is missing", async () => {
+    const { filesystem } = await setUp({ "bundle.min.js": `${"a".repeat(40_000)}\nsecond line\n`, "emoji.txt": `${"ab😀".repeat(10)}` });
+
+    const read = await filesystem.readTextFile("bundle.min.js", { maxCharacters: WEB_READ_CHARACTERS });
+    expect(read).toMatchObject({ totalLines: 2, startLine: 1, endLine: 1, hasMore: true });
+    expect(read.text).toBe("a".repeat(WEB_READ_CHARACTERS));
+    expect(read.note).toBe("Line 1 is 40,000 characters long. Only its first 16,000 are returned, and the rest of that line cannot be read with this tool.");
+    // The next call moves on to the next line instead of repeating this one.
+    expect(await filesystem.readTextFile("bundle.min.js", { startLine: 2, maxCharacters: WEB_READ_CHARACTERS }))
+      .toMatchObject({ startLine: 2, endLine: 2, hasMore: false, text: "second line" });
+    // Never half a character.
+    expect((await filesystem.readTextFile("emoji.txt", { maxCharacters: 3 })).text).toBe("ab");
+    expect((await filesystem.readTextFile("emoji.txt", { maxCharacters: 4 })).text).toBe("ab😀");
   });
 
   it("reads an empty file as no lines", async () => {
