@@ -83,6 +83,11 @@ AppImage file, so keep it where it was when you copied the setup.
 
 - `mcp-connector-vscode-….vsix`: the optional VS Code extension that shares
   your active editor with MCP Connector.
+- `mcp-connector-chrome-….zip`: the Chrome extension that lets a chat on
+  chatgpt.com ask for your tools. Unzip it, then in `chrome://extensions`
+  turn on **Developer mode**, click **Load unpacked** and choose the folder.
+  In MCP Connector, create a key under **Web chats** and paste it into the
+  extension's options.
 
 ## Known limits
 

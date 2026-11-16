@@ -60,10 +60,10 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
-        # Only what ships takes the release version: the app and the
-        # extension. The app depends on core's exact version, so changing
+        # Only what ships takes the release version: the app and the two
+        # extensions. The app depends on core's exact version, so changing
         # core too makes npm look for that old version online, and fail.
-        run: npm version "$env:VERSION" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
+        run: npm version "$env:VERSION" --workspace=apps/desktop --workspace=apps/vscode-extension --workspace=apps/chrome-extension --no-git-tag-version
 
       - name: Generate Prisma client
         run: npm run prisma:generate
@@ -91,7 +91,13 @@ jobs:
       - name: Build the agent skill
         run: npm run package:skill
 
-      # Only what users download: the installer, the extension and the skill.
+      # The zip is named after the release version. Chrome allows only numbers
+      # in the manifest's "version", so that gets 0.3.0 for 0.3.0-beta.1 and
+      # "version_name" gets the whole label.
+      - name: Build the Chrome extension
+        run: npm run package:chrome
+
+      # Only what users download: the installer, the extensions and the skill.
       # The builder's other files (blockmaps, update metadata, the unpacked
       # folder) are for an updater this release does not have. Copying the
       # exact names fails here if one is missing.
@@ -104,6 +110,7 @@ jobs:
           Copy-Item -ErrorAction Stop "apps/desktop/release/MCP-Connector-$env:VERSION-x64.exe" dist/
           Copy-Item -ErrorAction Stop "apps/vscode-extension/mcp-connector-vscode-$env:VERSION.vsix" dist/
           Copy-Item -ErrorAction Stop release/mcp-connector-skill.zip dist/
+          Copy-Item -ErrorAction Stop "release/mcp-connector-chrome-$env:VERSION.zip" dist/
 
       - name: Upload the release files
         uses: actions/upload-artifact@v7
@@ -139,7 +146,7 @@ jobs:
       - name: Set package version
         env:
           VERSION: ${{ inputs.version }}
-        # The same as on Windows: only the app and the extension.
+        # Only the app is built here; the extensions are built on Windows.
         run: npm version "$VERSION" --workspace=apps/desktop --workspace=apps/vscode-extension --no-git-tag-version
 
       - name: Generate Prisma client
@@ -209,3 +216,4 @@ jobs:
             dist/MCP-Connector-${{ inputs.version }}-amd64.deb
             dist/mcp-connector-vscode-${{ inputs.version }}.vsix
             dist/mcp-connector-skill.zip
+            dist/mcp-connector-chrome-${{ inputs.version }}.zip
