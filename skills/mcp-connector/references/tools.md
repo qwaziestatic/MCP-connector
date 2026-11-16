@@ -12,6 +12,8 @@ the name of the tool to call with that `previewId` once it is `APPROVED`.
 | `workspace_get_selected` | none | Returns the folder the user selected, or says none is selected. |
 | `filesystem_inspect_workspace` | `workspacePath` (optional) | Lists the files in the selected folder, or a subfolder given relative to it, and reads its README. Refuses anything outside the folder. |
 
+| `filesystem_read_file` | `path`, `startLine` (optional), `maxLines` (optional) | Returns the text of one file in the selected folder, with its `totalLines`, the `startLine` and `endLine` returned, and `hasMore`. Returns up to 2,000 lines; pass `startLine` and `maxLines` (at most 5,000) to read a longer file in parts. Refuses files outside the folder, over 1,000,000 bytes, not text, or likely to hold secrets. |
+
 ## Approvals
 
 | Tool | Input | What it does |
@@ -55,6 +57,8 @@ not offered that tool: their read-only tools run at once.
 | --- | --- |
 | "No workspace is selected" | Choose a folder in MCP Connector. |
 | "outside the user-selected workspace" | Only the selected folder can be read. |
+| "MCP Connector does not read" | That file usually holds secrets (`.env`, a private key, anything in `.git`), so it is never read. Do not look for another way to read it. |
+| "is too large to read" or "is not a text file" | That file cannot be read with these tools. |
 | "is not connected" | Click **Connect** next to the service in MCP Connector. |
 | "needs" and a setting's name | Set it in MCP Connector, under the service. |
 | "Explicit approval is required" | The preview is not approved yet; keep waiting or ask the user. |

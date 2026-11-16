@@ -269,6 +269,58 @@ describe("reads from web chats", () => {
     expect(await workflow.getStatus(preview.id)).toBe("APPROVED");
   });
 
+  it("shows a file read by its path in the workspace and its lines, with no content before approval", async () => {
+    const { connect, workflow, workspace } = await setUp();
+    const web = await connect("web");
+
+    const asked = await web.call("filesystem_read_file", { path: join(workspace, "docs", "..", "README.md"), startLine: 1, maxLines: 5 });
+    expect(text(asked)).not.toContain("Private notes");
+    const preview = previewOf(asked);
+    expect(preview).toMatchObject({
+      action: "READ",
+      target: "filesystem_read_file",
+      summary: "Read the file README.md, lines 1 to 5",
+      requiresApproval: true,
+      source: "web"
+    });
+    // What the user is shown, then exactly what will run.
+    expect(preview.payload).toEqual({
+      file: "README.md",
+      lines: "1 to 5",
+      tool: "filesystem_read_file",
+      arguments: { path: join(workspace, "docs", "..", "README.md"), startLine: 1, maxLines: 5 }
+    });
+    expect(answerOf(asked).executeTool).toBe("web_run_approved_read");
+
+    const whole = previewOf(await web.call("filesystem_read_file", { path: "README.md" }));
+    expect(whole.summary).toBe("Read the file README.md");
+    expect(whole.payload).toEqual({ file: "README.md", tool: "filesystem_read_file", arguments: { path: "README.md" } });
+
+    await workflow.approve(preview.id);
+    const read = JSON.parse(text(await web.call("web_run_approved_read", { previewId: preview.id }))) as Record<string, unknown>;
+    expect(read).toEqual({ path: "README.md", totalLines: 1, startLine: 1, endLine: 1, hasMore: false, text: "# Private notes" });
+  });
+
+  it("refuses a file outside the workspace or a secret file before asking the user", async () => {
+    const { connect, workflow, workspace } = await setUp();
+    await writeFile(join(workspace, ".env"), "API_KEY=secret");
+    const web = await connect("web");
+    const agent = await connect("mcp");
+
+    for (const client of [web, agent]) {
+      const outside = await client.call("filesystem_read_file", { path: "../other/notes.md" });
+      expect(outside.isError).toBe(true);
+      expect(text(outside)).toContain("outside the user-selected workspace");
+      const secret = await client.call("filesystem_read_file", { path: ".env" });
+      expect(secret.isError).toBe(true);
+      expect(text(secret)).toContain("MCP Connector does not read .env");
+      expect(text(secret)).not.toContain("API_KEY");
+    }
+    expect(await workflow.listPending()).toEqual([]);
+    // An agent's read of an ordinary file still runs at once.
+    expect(text(await agent.call("filesystem_read_file", { path: "README.md" }))).toContain("Private notes");
+  });
+
   it("marks a read FAILED when the tool reports an error", async () => {
     const { connect, workflow } = await setUp();
     const web = await connect("web");

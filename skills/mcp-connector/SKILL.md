@@ -28,6 +28,11 @@ without the user's explicit approval in its window. Follow these rules exactly.
 3. Call `filesystem_inspect_workspace` without a path for the whole folder, or
    with a path relative to it for a subfolder. Paths outside the folder are
    refused; do not try to get around that.
+4. Call `filesystem_read_file` with a path relative to the folder to read one
+   text file. If `hasMore` is true, call it again with `startLine` set to
+   `endLine + 1`. Files that usually hold secrets, such as `.env` and private
+   keys, are refused even inside the folder; do not look for another way to
+   read them.
 
 ## Changes need the user's approval
 

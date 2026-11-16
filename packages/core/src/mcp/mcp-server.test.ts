@@ -248,7 +248,7 @@ describe("MCP protocol integration", () => {
     const runtime: ConnectorRuntime = { tokens: { getAccessToken: async () => "token" }, requireSetting: () => "x" };
 
     expect(await tools(undefined)).toEqual([
-      "external_run_approved_call", "filesystem_inspect_workspace", "workflow_preview_status", "workspace_get_selected"
+      "external_run_approved_call", "filesystem_inspect_workspace", "filesystem_read_file", "workflow_preview_status", "workspace_get_selected"
     ]);
     expect(await tools([{ definition: createGitHubDefinition(), runtime }])).toContain("github_list_repositories");
     expect(await tools([{ definition: createGitHubDefinition(), runtime }])).not.toContain("notion_create_project_page");

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ConnectedConnector } from "../connectors/connector-definition.js";
-import { FilesystemService } from "../filesystem/filesystem.service.js";
+import { DEFAULT_READ_LINES, FilesystemService, MAX_READ_FILE_BYTES } from "../filesystem/filesystem.service.js";
 import type { ExternalToolSource } from "../gateway/external-servers.js";
 import { registerExternalTools } from "../gateway/gateway-tools.js";
 import { WorkflowService } from "../workflow/workflow.service.js";
@@ -29,6 +29,9 @@ export interface McpConnectorDependencies {
  * chat with the browser key. Both get the same tools; a web chat's previews
  * are labelled "web", and its reads can wait for approval.
  */
+export const READ_FILE_TOOL = "filesystem_read_file";
+const MAX_READ_LINES = 5_000;
+
 export function createMcpServer(
   dependencies: McpConnectorDependencies,
   source: McpClientSource = "mcp"
@@ -40,7 +43,20 @@ export function createMcpServer(
   const webReads = source === "web"
     ? askBeforeWebReads(server, {
         workflow: dependencies.workflow,
-        isOn: dependencies.askBeforeWebReads ?? (() => true)
+        isOn: dependencies.askBeforeWebReads ?? (() => true),
+        describe: {
+          // The user approves a file by its path in the workspace, not by whatever spelling was sent.
+          [READ_FILE_TOOL]: (args) => {
+            const { file, lines } = dependencies.filesystem.describeRead(
+              String(args.path),
+              { startLine: args.startLine as number | undefined, maxLines: args.maxLines as number | undefined }
+            );
+            return {
+              summary: lines === undefined ? `Read the file ${file}` : `Read the file ${file}, lines ${lines}`,
+              details: lines === undefined ? { file } : { file, lines }
+            };
+          }
+        }
       })
     : undefined;
 
@@ -93,6 +109,29 @@ export function createMcpServer(
       const target = workspacePath === undefined ? root : resolve(root, workspacePath);
       return result(await dependencies.filesystem.inspectWorkspace(target));
     }
+  );
+
+  server.registerTool(
+    READ_FILE_TOOL,
+    {
+      title: "Read a file",
+      description: "Read one text file in the user's selected workspace. path is relative to the workspace. "
+        + `Returns up to ${DEFAULT_READ_LINES.toLocaleString("en-US")} lines; for a longer file, pass startLine and maxLines `
+        + "and read on from endLine + 1 while hasMore is true. The answer gives the file's totalLines. "
+        + `Refuses files outside the workspace, files over ${MAX_READ_FILE_BYTES.toLocaleString("en-US")} bytes, files that are not text, `
+        + "and files that usually hold secrets (.env, private keys, anything in .git).",
+      inputSchema: {
+        path: z.string().min(1).max(4_096),
+        startLine: z.number().int().min(1).optional(),
+        maxLines: z.number().int().min(1).max(MAX_READ_LINES).optional()
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ path, startLine, maxLines }) => result(await dependencies.filesystem.readTextFile(path, { startLine, maxLines }))
   );
 
   server.registerTool(
