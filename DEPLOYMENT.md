@@ -246,6 +246,11 @@ two differences:
   that the approval can be followed. With the setting off, read-only tools
   answer web chats at once; changes still wait for approval.
 
+For `filesystem_read_file`, the preview names the file by its path inside the
+workspace, and the lines if a range was asked for, so you approve exactly
+that file. A path outside the workspace, or a file that usually holds
+secrets, is refused before anything is queued.
+
 Requests made with the agents' token behave as before: read-only tools run at
 once, and `web_run_approved_read` is not offered to them.
 

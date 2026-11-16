@@ -47,6 +47,12 @@ export function askBeforeWebReads(
     readonly workflow: WorkflowService;
     /** Whether reads wait for approval right now. Read on every call, so the setting reaches a running server. */
     readonly isOn: () => boolean | Promise<boolean>;
+    /**
+     * For tools that can say what a read would touch: a summary and details
+     * for the preview, from the arguments. It runs before anything is queued,
+     * so it can refuse a read the tool would refuse anyway by throwing.
+     */
+    readonly describe?: Readonly<Record<string, (args: Arguments) => { readonly summary: string; readonly details: Arguments }>>;
   }
 ): { registerRunTool(): void } {
   const { workflow, isOn } = options;
@@ -68,11 +74,13 @@ export function askBeforeWebReads(
       const args = (takesArguments ? received[0] : {}) as Arguments;
       const extra = takesArguments ? received[1] : received[0];
       if (!await isOn()) return read(args, extra);
+      const described = options.describe?.[name]?.(args);
       const preview = await workflow.createPreview(
         "READ",
         name,
-        `Run the read-only tool "${config.title ?? name}"`,
-        { tool: name, arguments: args },
+        described?.summary ?? `Run the read-only tool "${config.title ?? name}"`,
+        // What the user is shown comes first; the arguments are what runs.
+        { ...described?.details, tool: name, arguments: args },
         "web"
       );
       return previewResult(

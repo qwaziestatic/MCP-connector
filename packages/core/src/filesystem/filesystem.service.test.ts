@@ -2,7 +2,13 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { FilesystemService, isPathWithinRoot } from "./filesystem.service.js";
+import {
+  DEFAULT_READ_LINES,
+  FilesystemService,
+  isPathWithinRoot,
+  MAX_READ_FILE_BYTES,
+  secretFileReason
+} from "./filesystem.service.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -128,5 +134,166 @@ describe("isPathWithinRoot", () => {
     ["an unrelated absolute path", "/etc/passwd", false]
   ])("POSIX: %s", (_name, candidate, expected) => {
     expect(isPathWithinRoot(posixRoot, path.posix.resolve(candidate), path.posix)).toBe(expected);
+  });
+});
+
+describe("reading a file", () => {
+  async function setUp(files: Readonly<Record<string, string | Buffer>> = {}) {
+    const workspace = await mkdtemp(join(tmpdir(), "mcp-read-"));
+    temporaryDirectories.push(workspace);
+    for (const [name, content] of Object.entries(files)) {
+      await mkdir(join(workspace, name, ".."), { recursive: true });
+      await writeFile(join(workspace, name), content);
+    }
+    const filesystem = new FilesystemService();
+    filesystem.setAllowedWorkspaceRoot(workspace);
+    return { workspace, filesystem };
+  }
+
+  it("returns a file's text, its line count, and that nothing remains", async () => {
+    const { filesystem } = await setUp({ "src/index.ts": "export const a = 1;\nexport const b = 2;\n" });
+
+    expect(await filesystem.readTextFile("src/index.ts")).toEqual({
+      path: "src/index.ts",
+      totalLines: 2,
+      startLine: 1,
+      endLine: 2,
+      hasMore: false,
+      text: "export const a = 1;\nexport const b = 2;"
+    });
+    // However the path is spelled, the answer names the file inside the workspace.
+    expect((await filesystem.readTextFile("./src/../src/index.ts")).path).toBe("src/index.ts");
+  });
+
+  it("reads a large file in parts, saying how many lines there are and whether more remain", async () => {
+    const lines = Array.from({ length: 4_500 }, (_unused, index) => `line ${index + 1}`);
+    const { filesystem } = await setUp({ "log.txt": lines.join("\r\n") });
+
+    const first = await filesystem.readTextFile("log.txt");
+    expect(first).toMatchObject({ totalLines: 4_500, startLine: 1, endLine: DEFAULT_READ_LINES, hasMore: true });
+    expect(first.text.split("\n")).toHaveLength(DEFAULT_READ_LINES);
+
+    const middle = await filesystem.readTextFile("log.txt", { startLine: first.endLine + 1, maxLines: 3 });
+    expect(middle).toEqual({ path: "log.txt", totalLines: 4_500, startLine: 2_001, endLine: 2_003, hasMore: true, text: "line 2001\nline 2002\nline 2003" });
+
+    const last = await filesystem.readTextFile("log.txt", { startLine: 4_499, maxLines: 100 });
+    expect(last).toMatchObject({ startLine: 4_499, endLine: 4_500, hasMore: false, text: "line 4499\nline 4500" });
+
+    await expect(filesystem.readTextFile("log.txt", { startLine: 4_501 })).rejects.toThrow("has 4500 lines, so there is no line 4501");
+  });
+
+  it("reads an empty file as no lines", async () => {
+    const { filesystem } = await setUp({ "empty.txt": "" });
+    expect(await filesystem.readTextFile("empty.txt")).toEqual({ path: "empty.txt", totalLines: 0, startLine: 0, endLine: 0, hasMore: false, text: "" });
+  });
+
+  it("refuses paths outside the workspace, including through ..", async () => {
+    const { workspace, filesystem } = await setUp({ "notes.md": "inside" });
+    const outside = await mkdtemp(join(tmpdir(), "mcp-read-outside-"));
+    temporaryDirectories.push(outside);
+    await writeFile(join(outside, "secret.txt"), "outside");
+
+    for (const path of ["../secret.txt", "src/../../secret.txt", join(outside, "secret.txt"), "..", ".", workspace]) {
+      await expect(filesystem.readTextFile(path), path).rejects.toThrow("outside the user-selected workspace");
+    }
+  });
+
+  it("refuses a file reached through a link that leaves the workspace", async () => {
+    const { workspace, filesystem } = await setUp({ "notes.md": "inside" });
+    const outside = await mkdtemp(join(tmpdir(), "mcp-read-outside-"));
+    temporaryDirectories.push(outside);
+    await writeFile(join(outside, "secret.txt"), "outside");
+    await symlink(outside, join(workspace, "linked"), "junction");
+
+    await expect(filesystem.readTextFile("linked/secret.txt")).rejects.toThrow("outside the user-selected workspace");
+  });
+
+  it("refuses a harmless-looking link to a secret folder inside the workspace", async () => {
+    const { workspace, filesystem } = await setUp({ ".git/config": "[remote]\n  url = https://user:token@example.com/repo.git" });
+    await symlink(join(workspace, ".git"), join(workspace, "history"), "junction");
+
+    await expect(filesystem.readTextFile("history/config")).rejects.toThrow("inside a .git folder");
+  });
+
+  it("refuses files over the size limit", async () => {
+    const { filesystem } = await setUp({
+      "big.txt": "x".repeat(MAX_READ_FILE_BYTES + 1),
+      "just-fits.txt": "x".repeat(MAX_READ_FILE_BYTES)
+    });
+
+    await expect(filesystem.readTextFile("big.txt")).rejects.toThrow("big.txt is too large to read: 1,000,001 bytes, and the limit is 1,000,000.");
+    // A range does not get around the limit.
+    await expect(filesystem.readTextFile("big.txt", { startLine: 1, maxLines: 1 })).rejects.toThrow("too large to read");
+    expect((await filesystem.readTextFile("just-fits.txt")).totalLines).toBe(1);
+  });
+
+  it("refuses binary files", async () => {
+    const { filesystem } = await setUp({
+      "image.png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]),
+      "latin1.txt": Buffer.from([0x63, 0x61, 0x66, 0xe9]),
+      "utf16.txt": Buffer.from("hello", "utf16le"),
+      "accents.txt": "café ☕"
+    });
+
+    for (const name of ["image.png", "latin1.txt", "utf16.txt"]) {
+      await expect(filesystem.readTextFile(name), name).rejects.toThrow(`${name} is not a text file`);
+    }
+    expect((await filesystem.readTextFile("accents.txt")).text).toBe("café ☕");
+  });
+
+  it("refuses a folder, a missing file, and any read before a workspace is selected", async () => {
+    const { filesystem } = await setUp({ "src/index.ts": "x" });
+    await expect(filesystem.readTextFile("src")).rejects.toThrow("src is not a file");
+    await expect(filesystem.readTextFile("missing.txt")).rejects.toThrow("There is no file at missing.txt");
+    await expect(new FilesystemService().readTextFile("notes.md")).rejects.toThrow("Select a workspace");
+  });
+
+  describe("files that usually hold secrets", () => {
+    const refused: ReadonlyArray<readonly [string, string]> = [
+      [".env", "environment file"],
+      [".env.local", "environment file"],
+      [".env.production", "environment file"],
+      ["config/.ENV", "environment file"],
+      ["certs/server.pem", "Files ending in .pem"],
+      ["certs/server.key", "Files ending in .key"],
+      ["certs/identity.p12", "Files ending in .p12"],
+      ["certs/identity.pfx", "Files ending in .pfx"],
+      ["keys/putty.ppk", "Files ending in .ppk"],
+      ["id_rsa", "SSH private key"],
+      [".ssh/id_ed25519", "SSH private key"],
+      [".ssh/id_ecdsa", "SSH private key"],
+      [".ssh/id_dsa", "SSH private key"],
+      [".git/config", "inside a .git folder"],
+      [".git/HEAD", "inside a .git folder"],
+      ["vendor/lib/.git/config", "inside a .git folder"]
+    ];
+
+    for (const [path, reason] of refused) {
+      it(`refuses ${path} and says why`, async () => {
+        const { filesystem } = await setUp({ [path]: "SECRET=1" });
+        await expect(filesystem.readTextFile(path)).rejects.toThrow(reason);
+        await expect(filesystem.readTextFile(path)).rejects.toThrow("MCP Connector does not read");
+        // The preview for a web chat refuses it too, before anything is queued.
+        expect(() => filesystem.describeRead(path)).toThrow(reason);
+      });
+    }
+
+    it("still reads the files next to them that hold no secrets", async () => {
+      const allowed = [".env.example", "id_rsa.pub", ".gitignore", ".github/workflows/ci.yml", "docs/keys.md", "src/env.ts"];
+      const { filesystem } = await setUp(Object.fromEntries(allowed.map((path) => [path, "public"])));
+      for (const path of allowed) {
+        expect((await filesystem.readTextFile(path)).text, path).toBe("public");
+        expect(secretFileReason(path), path).toBeNull();
+      }
+    });
+  });
+
+  it("describes a read by the file's path in the workspace and the lines asked for", async () => {
+    const { workspace, filesystem } = await setUp({ "src/index.ts": "x" });
+    expect(filesystem.describeRead("./src/../src/index.ts")).toEqual({ file: "src/index.ts" });
+    expect(filesystem.describeRead(join(workspace, "src", "index.ts"), { startLine: 10, maxLines: 50 })).toEqual({ file: "src/index.ts", lines: "10 to 59" });
+    expect(filesystem.describeRead("src/index.ts", { maxLines: 20 })).toEqual({ file: "src/index.ts", lines: "1 to 20" });
+    expect(filesystem.describeRead("src/index.ts", { startLine: 300 })).toEqual({ file: "src/index.ts", lines: "300 onwards" });
+    expect(() => filesystem.describeRead("../elsewhere.txt")).toThrow("outside the user-selected workspace");
   });
 });
